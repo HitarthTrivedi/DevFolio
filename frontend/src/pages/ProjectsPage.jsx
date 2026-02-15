@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -281,6 +282,9 @@ export default function ProjectsPage() {
             <DialogTitle className="font-serif text-xl">
               {editingProject ? 'Edit Project' : 'Add Project'}
             </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {editingProject ? 'Update your project details below.' : 'Add a new project to your portfolio.'}
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-6 mt-4">
