@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  ExternalLink, 
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ExternalLink,
   Github,
   X
 } from 'lucide-react';
@@ -55,7 +55,7 @@ export default function ProjectsPage() {
   const [techInput, setTechInput] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/projects`, {
         headers: getAuthHeaders()
@@ -66,11 +66,11 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders]);
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [fetchProjects]);
 
   const openCreateModal = () => {
     setEditingProject(null);
@@ -128,7 +128,7 @@ export default function ProjectsPage() {
 
   const handleDelete = async () => {
     if (!projectToDelete) return;
-    
+
     try {
       await axios.delete(
         `${API_URL}/projects/${projectToDelete.id}`,
@@ -168,7 +168,7 @@ export default function ProjectsPage() {
           <p className="text-sm font-mono text-muted-foreground mb-2">// Projects</p>
           <h1 className="font-serif text-3xl font-medium">Your Projects</h1>
         </div>
-        <Button 
+        <Button
           onClick={openCreateModal}
           className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
           data-testid="add-project-button"
@@ -188,7 +188,7 @@ export default function ProjectsPage() {
           <p className="text-sm text-muted-foreground mb-6">
             Add your first project to get started
           </p>
-          <Button 
+          <Button
             onClick={openCreateModal}
             className="bg-white text-black hover:bg-gray-200 rounded-sm"
           >
@@ -198,8 +198,8 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {projects.map((project) => (
-            <div 
-              key={project.id} 
+            <div
+              key={project.id}
               className="project-card p-6"
               data-testid={`project-card-${project.id}`}
             >
@@ -229,11 +229,11 @@ export default function ProjectsPage() {
                   </Button>
                 </div>
               </div>
-              
+
               <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
                 {project.description}
               </p>
-              
+
               {/* Tech Stack */}
               {project.tech_stack?.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -244,7 +244,7 @@ export default function ProjectsPage() {
                   ))}
                 </div>
               )}
-              
+
               {/* Links */}
               <div className="flex items-center gap-4">
                 {project.github_link && (
@@ -286,7 +286,7 @@ export default function ProjectsPage() {
               {editingProject ? 'Update your project details below.' : 'Add a new project to your portfolio.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-6 mt-4">
             <div className="space-y-2">
               <Label htmlFor="title">Title *</Label>

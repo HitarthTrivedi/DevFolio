@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
+import {
+  Plus,
+  Pencil,
+  Trash2,
   ExternalLink,
   Calendar
 } from 'lucide-react';
@@ -51,7 +51,7 @@ export default function AchievementsPage() {
   const [formData, setFormData] = useState(emptyAchievement);
   const [saving, setSaving] = useState(false);
 
-  const fetchAchievements = async () => {
+  const fetchAchievements = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/achievements`, {
         headers: getAuthHeaders()
@@ -62,11 +62,11 @@ export default function AchievementsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders]);
 
   useEffect(() => {
     fetchAchievements();
-  }, []);
+  }, [fetchAchievements]);
 
   const openCreateModal = () => {
     setEditingAchievement(null);
@@ -120,7 +120,7 @@ export default function AchievementsPage() {
 
   const handleDelete = async () => {
     if (!achievementToDelete) return;
-    
+
     try {
       await axios.delete(
         `${API_URL}/achievements/${achievementToDelete.id}`,
@@ -156,7 +156,7 @@ export default function AchievementsPage() {
           <p className="text-sm font-mono text-muted-foreground mb-2">// Achievements</p>
           <h1 className="font-serif text-3xl font-medium">Your Achievements</h1>
         </div>
-        <Button 
+        <Button
           onClick={openCreateModal}
           className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
           data-testid="add-achievement-button"
@@ -176,7 +176,7 @@ export default function AchievementsPage() {
           <p className="text-sm text-muted-foreground mb-6">
             Add your first achievement to showcase your accomplishments
           </p>
-          <Button 
+          <Button
             onClick={openCreateModal}
             className="bg-white text-black hover:bg-gray-200 rounded-sm"
           >
@@ -186,8 +186,8 @@ export default function AchievementsPage() {
       ) : (
         <div className="space-y-4">
           {achievements.map((achievement) => (
-            <div 
-              key={achievement.id} 
+            <div
+              key={achievement.id}
               className="project-card p-6 flex items-start justify-between"
               data-testid={`achievement-card-${achievement.id}`}
             >
@@ -196,7 +196,7 @@ export default function AchievementsPage() {
                 <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
                   {achievement.description}
                 </p>
-                
+
                 <div className="flex items-center gap-4 text-sm">
                   {achievement.date && (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -217,7 +217,7 @@ export default function AchievementsPage() {
                   )}
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2 ml-4">
                 <Button
                   variant="ghost"
@@ -257,7 +257,7 @@ export default function AchievementsPage() {
               {editingAchievement ? 'Update your achievement details below.' : 'Add a new achievement to your portfolio.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-6 mt-4">
             <div className="space-y-2">
               <Label htmlFor="title">Title *</Label>
