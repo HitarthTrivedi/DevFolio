@@ -7,10 +7,17 @@ import {
   Calendar, 
   ArrowLeft,
   Copy,
-  Check
+  Check,
+  Code
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -21,6 +28,7 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -175,12 +183,16 @@ export default function PublicProfilePage() {
                   {profile.projects.map((project, idx) => (
                     <article 
                       key={project.id || idx} 
-                      className="project-card p-6"
+                      className="project-card p-6 cursor-pointer hover:border-white/30 transition-all group"
+                      onClick={() => setSelectedProject(project)}
                       data-testid={`public-project-${idx}`}
                     >
-                      <h3 className="font-sans text-lg font-medium mb-3">
-                        {project.title}
-                      </h3>
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-sans text-lg font-medium group-hover:text-white transition-colors">
+                          {project.title}
+                        </h3>
+                        <ExternalLink className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                       <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
                         {project.description}
                       </p>
@@ -188,16 +200,21 @@ export default function PublicProfilePage() {
                       {/* Tech Stack */}
                       {project.tech_stack?.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {project.tech_stack.map((tech, techIdx) => (
+                          {project.tech_stack.slice(0, 3).map((tech, techIdx) => (
                             <span key={techIdx} className="tech-tag">
                               {tech}
                             </span>
                           ))}
+                          {project.tech_stack.length > 3 && (
+                            <span className="text-[10px] font-mono text-muted-foreground self-center">
+                              +{project.tech_stack.length - 3} more
+                            </span>
+                          )}
                         </div>
                       )}
                       
                       {/* Links */}
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
                         {project.github_link && (
                           <a
                             href={project.github_link}
@@ -284,6 +301,92 @@ export default function PublicProfilePage() {
           </p>
         </div>
       </footer>
+      {/* Project Detail Dialog */}
+      <Dialog open={!!selectedProject} onOpenChange={(open) => !open && setSelectedProject(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto bg-[#0a0a0a] border-white/10 text-white rounded-sm p-0 gap-0">
+          <div className="p-8">
+            <DialogHeader className="mb-6 space-y-4">
+              <div className="flex justify-between items-start">
+                <DialogTitle className="font-serif text-3xl font-medium tracking-tight">
+                  {selectedProject?.title}
+                </DialogTitle>
+                <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
+                  {selectedProject?.github_link && (
+                    <a
+                      href={selectedProject.github_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"
+                      title="View GitHub"
+                    >
+                      <Github className="w-5 h-5" />
+                    </a>
+                  )}
+                  {selectedProject?.live_demo_link && (
+                    <a
+                      href={selectedProject.live_demo_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"
+                      title="Live Demo"
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                    </a>
+                  )}
+                </div>
+              </div>
+              
+              {selectedProject?.tech_stack?.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedProject.tech_stack.map((tech, idx) => (
+                    <span key={idx} className="tech-tag bg-white/5 px-3 py-1 text-xs">
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </DialogHeader>
+
+            <div className="space-y-8">
+              {/* Description Section */}
+              <section>
+                <h4 className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span className="w-8 h-[1px] bg-white/10" />
+                  Description
+                </h4>
+                <div className="text-muted-foreground leading-relaxed whitespace-pre-wrap font-sans">
+                  {selectedProject?.description}
+                </div>
+              </section>
+
+              {/* README Section */}
+              {selectedProject?.readme_content && (
+                <section className="pt-4 border-t border-white/5">
+                  <h4 className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="w-8 h-[1px] bg-white/10" />
+                    Project Details
+                  </h4>
+                  <div className="bg-[#050505] border border-white/5 rounded-sm p-6 overflow-x-auto">
+                    <div className="text-sm font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                      {selectedProject.readme_content}
+                    </div>
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+          
+          <div className="p-4 border-t border-white/5 bg-[#0a0a0a] flex justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => setSelectedProject(null)}
+              className="border-white/10 text-white hover:bg-white/5 rounded-sm text-xs font-mono"
+            >
+              // Close detail view
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
