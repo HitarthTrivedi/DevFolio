@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -22,15 +23,15 @@ export default function RegisterPage() {
       toast.error('Please fill in all fields');
       return;
     }
-    
+
     if (password.length < 6) {
       toast.error('Password must be at least 6 characters');
       return;
     }
-    
+
     setLoading(true);
     try {
-      await register(name, email, password);
+      await register(name, email, password, keepSignedIn);
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (error) {
@@ -45,13 +46,13 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-[#050505] relative flex">
       {/* Animated Background */}
       <div className="absolute inset-0 animated-gradient opacity-20" />
-      
+
       {/* Left Side - Form */}
       <div className="relative z-10 w-full lg:w-1/2 flex flex-col justify-center px-8 lg:px-16">
         <div className="max-w-md w-full mx-auto">
           {/* Back Link */}
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-white text-sm mb-12 transition-colors duration-200"
             data-testid="back-link"
           >
@@ -63,7 +64,7 @@ export default function RegisterPage() {
           <div className="mb-10">
             <h1 className="font-serif text-3xl font-medium mb-3">Create your account</h1>
             <p className="text-muted-foreground">
-              Start building your AI-ready portfolio
+              Start building your AI-ready portfolio on REZUM
             </p>
           </div>
 
@@ -123,6 +124,36 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {/* Keep me signed in */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                id="keep-signed-in-register"
+                onClick={() => setKeepSignedIn(!keepSignedIn)}
+                className={`w-5 h-5 border rounded-sm flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
+                  keepSignedIn
+                    ? 'bg-white border-white'
+                    : 'bg-transparent border-white/30 hover:border-white/60'
+                }`}
+                data-testid="keep-signed-in-checkbox"
+                aria-checked={keepSignedIn}
+                role="checkbox"
+              >
+                {keepSignedIn && (
+                  <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                  </svg>
+                )}
+              </button>
+              <label
+                htmlFor="keep-signed-in-register"
+                onClick={() => setKeepSignedIn(!keepSignedIn)}
+                className="text-sm text-muted-foreground cursor-pointer select-none hover:text-white transition-colors"
+              >
+                Keep me signed in
+              </label>
+            </div>
+
             <Button
               type="submit"
               disabled={loading}
@@ -136,8 +167,8 @@ export default function RegisterPage() {
           {/* Login Link */}
           <p className="mt-8 text-center text-muted-foreground text-sm">
             Already have an account?{' '}
-            <Link 
-              to="/login" 
+            <Link
+              to="/login"
               className="text-white hover:underline"
               data-testid="login-link"
             >

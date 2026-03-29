@@ -7,7 +7,8 @@ import {
   Trash2,
   ExternalLink,
   Github,
-  X
+  X,
+  Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,8 @@ const emptyProject = {
   readme_content: '',
   tech_stack: [],
   github_link: '',
-  live_demo_link: ''
+  live_demo_link: '',
+  video_link: ''
 };
 
 export default function ProjectsPage() {
@@ -87,7 +89,8 @@ export default function ProjectsPage() {
       readme_content: project.readme_content || '',
       tech_stack: project.tech_stack || [],
       github_link: project.github_link || '',
-      live_demo_link: project.live_demo_link || ''
+      live_demo_link: project.live_demo_link || '',
+      video_link: project.video_link || ''
     });
     setTechInput('');
     setModalOpen(true);
@@ -246,7 +249,7 @@ export default function ProjectsPage() {
               )}
 
               {/* Links */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 {project.github_link && (
                   <a
                     href={project.github_link}
@@ -267,6 +270,17 @@ export default function ProjectsPage() {
                   >
                     <ExternalLink className="w-4 h-4" />
                     Demo
+                  </a>
+                )}
+                {project.video_link && (
+                  <a
+                    href={project.video_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-white transition-colors"
+                  >
+                    <Video className="w-4 h-4" />
+                    Video
                   </a>
                 )}
               </div>
@@ -383,6 +397,27 @@ export default function ProjectsPage() {
                   placeholder="https://..."
                   className="bg-transparent border-white/20 rounded-sm"
                   data-testid="project-demo-input"
+                />
+              </div>
+            </div>
+
+            {/* Video Link - full width */}
+            <div className="space-y-2">
+              <Label htmlFor="video">
+                Video Link
+                <span className="ml-2 text-xs text-muted-foreground font-normal">
+                  (Google Drive, YouTube, Instagram Reel, etc.)
+                </span>
+              </Label>
+              <div className="relative">
+                <Video className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="video"
+                  value={formData.video_link}
+                  onChange={(e) => setFormData({ ...formData, video_link: e.target.value })}
+                  placeholder="https://drive.google.com/... or https://youtu.be/..."
+                  className="bg-transparent border-white/20 rounded-sm pl-10"
+                  data-testid="project-video-input"
                 />
               </div>
             </div>

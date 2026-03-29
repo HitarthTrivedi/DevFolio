@@ -1,13 +1,20 @@
 import { useAuth } from '@/context/AuthContext';
-import { Copy, Check, ExternalLink } from 'lucide-react';
+import { Copy, Check, ExternalLink, Github, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, getAuthHeaders, refreshUser } = useAuth();
   const [copiedSlug, setCopiedSlug] = useState(false);
   const [copiedExport, setCopiedExport] = useState(false);
+  const [githubInput, setGithubInput] = useState(user?.github_username || '');
+  const [githubSaving, setGithubSaving] = useState(false);
+  const [localGithub, setLocalGithub] = useState(user?.github_username || null);
 
   const profileUrl = `${window.location.origin}/profile/${user?.unique_slug}`;
   const exportUrl = `${process.env.REACT_APP_BACKEND_URL}/api/export/${user?.unique_slug}`;
@@ -28,6 +35,48 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGithubConnect = async () => {
+    const trimmed = githubInput.trim().replace(/^@/, '');
+    if (!trimmed) {
+      toast.error('Please enter a GitHub username');
+      return;
+    }
+    setGithubSaving(true);
+    try {
+      await axios.patch(
+        `${API_URL}/auth/github`,
+        { github_username: trimmed },
+        { headers: getAuthHeaders() }
+      );
+      setLocalGithub(trimmed);
+      await refreshUser();
+      toast.success(`Connected to @${trimmed}`);
+    } catch (err) {
+      toast.error('Failed to connect GitHub');
+    } finally {
+      setGithubSaving(false);
+    }
+  };
+
+  const handleGithubDisconnect = async () => {
+    setGithubSaving(true);
+    try {
+      await axios.patch(
+        `${API_URL}/auth/github`,
+        { github_username: '' },
+        { headers: getAuthHeaders() }
+      );
+      setLocalGithub(null);
+      setGithubInput('');
+      await refreshUser();
+      toast.success('GitHub disconnected');
+    } catch (err) {
+      toast.error('Failed to disconnect GitHub');
+    } finally {
+      setGithubSaving(false);
+    }
+  };
+
   return (
     <div className="p-8 lg:p-12" data-testid="settings-page">
       {/* Header */}
@@ -39,18 +88,18 @@ export default function SettingsPage() {
       {/* Profile Info */}
       <section className="project-card p-8 mb-8">
         <h2 className="font-sans text-lg font-medium mb-6">Profile Information</h2>
-        
+
         <div className="space-y-6">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Name</label>
             <p className="text-lg">{user?.name}</p>
           </div>
-          
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Email</label>
             <p className="text-lg">{user?.email}</p>
           </div>
-          
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Member since</label>
             <p className="text-lg">
@@ -64,13 +113,90 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* GitHub Integration */}
+      <section className="project-card p-8 mb-8">
+        <div className="flex items-start gap-4 mb-6">
+          <div className="w-10 h-10 flex items-center justify-center border border-white/10 flex-shrink-0">
+            <Github className="w-5 h-5" strokeWidth={1.5} />
+          </div>
+          <div>
+            <h2 className="font-sans text-lg font-medium mb-1">GitHub Integration</h2>
+            <p className="text-sm text-muted-foreground">
+              Connect your GitHub account to display your contribution calendar and auto-sync public repos in your dashboard.
+            </p>
+          </div>
+        </div>
+
+        {localGithub ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-sm">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+              <span className="text-sm text-emerald-300 font-medium">Connected as @{localGithub}</span>
+              <a
+                href={`https://github.com/${localGithub}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto text-emerald-400/70 hover:text-emerald-300 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+            <div className="flex gap-3">
+              <Input
+                value={githubInput}
+                onChange={(e) => setGithubInput(e.target.value)}
+                placeholder="Change username..."
+                className="bg-transparent border-white/20 rounded-sm flex-1"
+                data-testid="github-username-input"
+              />
+              <Button
+                onClick={handleGithubConnect}
+                disabled={githubSaving}
+                variant="outline"
+                className="border-white/20 rounded-sm"
+              >
+                Update
+              </Button>
+              <Button
+                onClick={handleGithubDisconnect}
+                disabled={githubSaving}
+                variant="ghost"
+                className="text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded-sm"
+                data-testid="github-disconnect-button"
+              >
+                <Unlink className="w-4 h-4 mr-2" />
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <Input
+              value={githubInput}
+              onChange={(e) => setGithubInput(e.target.value)}
+              placeholder="Your GitHub username (e.g. torvalds)"
+              className="bg-transparent border-white/20 rounded-sm flex-1"
+              data-testid="github-username-input"
+            />
+            <Button
+              onClick={handleGithubConnect}
+              disabled={githubSaving}
+              className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
+              data-testid="github-connect-button"
+            >
+              {githubSaving ? 'Connecting...' : 'Connect'}
+            </Button>
+          </div>
+        )}
+      </section>
+
       {/* Public URLs */}
       <section className="project-card p-8 mb-8">
         <h2 className="font-sans text-lg font-medium mb-2">Your Public URLs</h2>
         <p className="text-sm text-muted-foreground mb-6">
           Share these URLs to give others access to your portfolio
         </p>
-        
+
         <div className="space-y-6">
           {/* Profile URL */}
           <div>
@@ -151,7 +277,7 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Your unique slug is used in all your public URLs
         </p>
-        
+
         <div className="inline-block">
           <span className="font-mono text-lg px-4 py-2 bg-white/5 border border-white/10">
             {user?.unique_slug}

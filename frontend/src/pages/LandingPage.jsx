@@ -16,7 +16,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2">
-              <span className="font-serif text-xl font-semibold tracking-tight">DevFolio</span>
+              <span className="font-serif text-xl font-semibold tracking-widest">REZUM</span>
             </Link>
             
             <div className="flex items-center gap-6">
@@ -175,7 +175,7 @@ export default function LandingPage() {
               className="bg-white text-black hover:bg-gray-200 rounded-sm px-10 py-6 text-base font-medium"
               data-testid="cta-button"
             >
-              Create Your DevFolio
+              Create Your REZUM
             </Button>
           </Link>
         </div>
@@ -186,7 +186,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <span className="font-serif text-lg">DevFolio</span>
+              <span className="font-serif text-lg tracking-widest">REZUM</span>
               <span className="text-muted-foreground text-sm">— AI-ready portfolios</span>
             </div>
             

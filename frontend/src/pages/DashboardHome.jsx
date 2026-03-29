@@ -2,23 +2,25 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
-import { 
-  FolderKanban, 
-  Award, 
-  Copy, 
-  Check, 
+import {
+  FolderKanban,
+  Award,
+  Copy,
+  Check,
   ExternalLink,
-  ArrowRight
+  ArrowRight,
+  Github
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue 
+  SelectValue
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import GitHubCalendar from '@/components/GitHubCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -45,12 +47,11 @@ export default function DashboardHome() {
         setLoading(false);
       }
     };
-    
+
     fetchStats();
   }, [getAuthHeaders]);
 
   const getExportUrl = () => {
-    const baseUrl = window.location.origin;
     return `${process.env.REACT_APP_BACKEND_URL}/api/export/${user?.unique_slug}?sections=${exportSection}`;
   };
 
@@ -106,6 +107,42 @@ export default function DashboardHome() {
         </Link>
       </div>
 
+      {/* GitHub Contribution Calendar */}
+      {user?.github_username && (
+        <div className="project-card p-8 mb-8" data-testid="github-calendar-section">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 flex items-center justify-center border border-white/10">
+              <Github className="w-5 h-5" strokeWidth={1.5} />
+            </div>
+            <div>
+              <h2 className="font-sans text-base font-medium">GitHub Activity</h2>
+              <p className="text-xs text-muted-foreground">@{user.github_username}</p>
+            </div>
+          </div>
+          <GitHubCalendar username={user.github_username} />
+        </div>
+      )}
+
+      {/* GitHub Connect Prompt (if not connected) */}
+      {!user?.github_username && (
+        <div className="project-card p-6 mb-8 border-dashed">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Github className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
+              <div>
+                <p className="text-sm font-medium">Connect GitHub</p>
+                <p className="text-xs text-muted-foreground">Show your contribution calendar on your dashboard</p>
+              </div>
+            </div>
+            <Link to="/dashboard/settings">
+              <Button variant="outline" className="border-white/20 rounded-sm text-sm px-4">
+                Connect →
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* AI Export Section */}
       <div className="project-card p-8" data-testid="export-section">
         <div className="flex items-start justify-between mb-6">
@@ -123,7 +160,7 @@ export default function DashboardHome() {
             Include sections
           </label>
           <Select value={exportSection} onValueChange={setExportSection}>
-            <SelectTrigger 
+            <SelectTrigger
               className="w-48 bg-transparent border-white/20 rounded-sm"
               data-testid="export-section-select"
             >
@@ -185,7 +222,7 @@ export default function DashboardHome() {
       {/* Quick Actions */}
       <div className="mt-8 flex flex-wrap gap-4">
         <Link to="/dashboard/projects">
-          <Button 
+          <Button
             className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
             data-testid="add-project-cta"
           >
@@ -193,7 +230,7 @@ export default function DashboardHome() {
           </Button>
         </Link>
         <Link to="/dashboard/achievements">
-          <Button 
+          <Button
             variant="outline"
             className="border-white/20 text-white hover:bg-white/5 rounded-sm px-6"
             data-testid="add-achievement-cta"

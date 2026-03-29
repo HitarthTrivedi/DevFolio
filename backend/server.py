@@ -12,7 +12,8 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import hashlib
 import jwt
-import secrets
+import secrets                                                                                
+from contextlib import asynccontextmanager
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -27,8 +28,13 @@ JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    client.close()
+
 # Create the main app
-app = FastAPI(title="DevFolio API", description="AI-Readable Portfolio Platform")
+app = FastAPI(title="REZUM API", description="AI-Readable Portfolio Platform", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -55,12 +61,16 @@ class UserResponse(BaseModel):
     email: str
     name: str
     unique_slug: str
+    github_username: Optional[str] = None
     created_at: str
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+class GitHubConnectRequest(BaseModel):
+    github_username: str
 
 class ProjectBase(BaseModel):
     title: str
@@ -69,6 +79,7 @@ class ProjectBase(BaseModel):
     tech_stack: List[str] = []
     github_link: Optional[str] = ""
     live_demo_link: Optional[str] = ""
+    video_link: Optional[str] = ""
 
 class ProjectCreate(ProjectBase):
     pass
@@ -80,6 +91,7 @@ class ProjectUpdate(BaseModel):
     tech_stack: Optional[List[str]] = None
     github_link: Optional[str] = None
     live_demo_link: Optional[str] = None
+    video_link: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
     model_config = ConfigDict(extra="ignore")
@@ -164,8 +176,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
+    normalized_email = user_data.email.lower().strip()
     # Check if email exists
-    existing = await db.users.find_one({"email": user_data.email})
+    existing = await db.users.find_one({"email": normalized_email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -178,7 +191,7 @@ async def register(user_data: UserCreate):
     
     user_doc = {
         "id": user_id,
-        "email": user_data.email,
+        "email": normalized_email,
         "name": user_data.name,
         "password_hash": hash_password(user_data.password),
         "unique_slug": unique_slug,
@@ -190,7 +203,7 @@ async def register(user_data: UserCreate):
     token = create_token(user_id)
     user_response = UserResponse(
         id=user_id,
-        email=user_data.email,
+        email=normalized_email,
         name=user_data.name,
         unique_slug=unique_slug,
         created_at=user_doc["created_at"]
@@ -200,7 +213,8 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    normalized_email = credentials.email.lower().strip()
+    user = await db.users.find_one({"email": normalized_email}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
@@ -222,7 +236,26 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         email=current_user["email"],
         name=current_user["name"],
         unique_slug=current_user["unique_slug"],
+        github_username=current_user.get("github_username"),
         created_at=current_user["created_at"]
+    )
+
+@api_router.patch("/auth/github", response_model=UserResponse)
+async def connect_github(data: GitHubConnectRequest, current_user: dict = Depends(get_current_user)):
+    """Connect or disconnect a GitHub account by setting the username."""
+    username = data.github_username.strip().lstrip('@') if data.github_username else None
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"github_username": username}}
+    )
+    updated = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    return UserResponse(
+        id=updated["id"],
+        email=updated["email"],
+        name=updated["name"],
+        unique_slug=updated["unique_slug"],
+        github_username=updated.get("github_username"),
+        created_at=updated["created_at"]
     )
 
 # ============ PROJECT ROUTES ============
@@ -359,7 +392,8 @@ async def get_public_profile(slug: str, sections: str = "all"):
     
     response = {
         "name": user["name"],
-        "unique_slug": user["unique_slug"]
+        "unique_slug": user["unique_slug"],
+        "github_username": user.get("github_username")
     }
     
     if sections in ["all", "projects"]:
@@ -462,7 +496,3 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()

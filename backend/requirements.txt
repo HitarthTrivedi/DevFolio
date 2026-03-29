@@ -1,4 +1,4 @@
-fastapi==0.110.1
+fastapi>=0.115.2,<1.0
 uvicorn==0.25.0
 motor==3.3.1
 pymongo==4.5.0
@@ -6,6 +6,6 @@ python-dotenv==1.2.1
 PyJWT==2.9.0
 pydantic[email]==2.12.5
 python-multipart==0.0.22
-starlette==0.37.2
+starlette>=0.40.0,<1.0
 # Include Google AI if you plan to use it, but without strict sub-dependency pins
 google-generativeai==0.8.6

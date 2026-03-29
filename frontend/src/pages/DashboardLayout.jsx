@@ -32,8 +32,8 @@ export default function DashboardLayout() {
       <aside className="fixed left-0 top-0 h-screen w-64 border-r border-white/10 flex flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-white/10">
-          <NavLink to="/" className="font-serif text-xl font-medium">
-            DevFolio
+          <NavLink to="/" className="font-serif text-xl font-medium tracking-widest">
+            REZUM
           </NavLink>
         </div>
 

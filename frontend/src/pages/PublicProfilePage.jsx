@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  Github, 
-  ExternalLink, 
-  Calendar, 
-  ArrowLeft,
+import {
+  Github,
+  ExternalLink,
+  Calendar,
   Copy,
   Check,
-  Code
+  Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from 'sonner';
+import GitHubCalendar from '@/components/GitHubCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -100,6 +100,7 @@ export default function PublicProfilePage() {
 
   const projectsCount = profile?.projects?.length || 0;
   const achievementsCount = profile?.achievements?.length || 0;
+  const githubUsername = profile?.github_username;
 
   return (
     <div className="min-h-screen bg-[#050505] relative">
@@ -112,9 +113,9 @@ export default function PublicProfilePage() {
         <div className="max-w-5xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2">
-              <span className="font-serif text-xl font-medium">DevFolio</span>
+              <span className="font-serif text-xl font-medium tracking-widest">REZUM</span>
             </Link>
-            
+
             <Button
               onClick={copyExportUrl}
               variant="outline"
@@ -150,21 +151,46 @@ export default function PublicProfilePage() {
             </h1>
             <p className="text-muted-foreground">
               {projectsCount} {projectsCount === 1 ? 'project' : 'projects'} · {achievementsCount} {achievementsCount === 1 ? 'achievement' : 'achievements'}
+              {githubUsername && (
+                <span className="ml-3 inline-flex items-center gap-1">
+                  ·
+                  <a
+                    href={`https://github.com/${githubUsername}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 hover:text-white transition-colors ml-1"
+                  >
+                    <Github className="w-3.5 h-3.5" />
+                    @{githubUsername}
+                  </a>
+                </span>
+              )}
             </p>
           </header>
+
+          {/* GitHub Contribution Calendar */}
+          {githubUsername && (
+            <div className="project-card p-6 mb-10" data-testid="public-github-calendar">
+              <div className="flex items-center gap-2 mb-5">
+                <Github className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                <span className="text-sm font-medium">GitHub Contributions</span>
+              </div>
+              <GitHubCalendar username={githubUsername} />
+            </div>
+          )}
 
           {/* Tabs */}
           <Tabs defaultValue="projects" className="w-full">
             <TabsList className="bg-transparent border-b border-white/10 rounded-none w-full justify-start h-auto p-0 mb-8">
-              <TabsTrigger 
-                value="projects" 
+              <TabsTrigger
+                value="projects"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-white data-[state=active]:bg-transparent px-6 py-3 text-sm"
                 data-testid="projects-tab"
               >
                 Projects
               </TabsTrigger>
-              <TabsTrigger 
-                value="achievements" 
+              <TabsTrigger
+                value="achievements"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-white data-[state=active]:bg-transparent px-6 py-3 text-sm"
                 data-testid="achievements-tab"
               >
@@ -181,8 +207,8 @@ export default function PublicProfilePage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {profile.projects.map((project, idx) => (
-                    <article 
-                      key={project.id || idx} 
+                    <article
+                      key={project.id || idx}
                       className="project-card p-6 cursor-pointer hover:border-white/30 transition-all group"
                       onClick={() => setSelectedProject(project)}
                       data-testid={`public-project-${idx}`}
@@ -196,7 +222,7 @@ export default function PublicProfilePage() {
                       <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
                         {project.description}
                       </p>
-                      
+
                       {/* Tech Stack */}
                       {project.tech_stack?.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-4">
@@ -212,9 +238,9 @@ export default function PublicProfilePage() {
                           )}
                         </div>
                       )}
-                      
+
                       {/* Links */}
-                      <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-4 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         {project.github_link && (
                           <a
                             href={project.github_link}
@@ -237,6 +263,17 @@ export default function PublicProfilePage() {
                             Demo
                           </a>
                         )}
+                        {project.video_link && (
+                          <a
+                            href={project.video_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-white transition-colors"
+                          >
+                            <Video className="w-4 h-4" />
+                            Video
+                          </a>
+                        )}
                       </div>
                     </article>
                   ))}
@@ -253,8 +290,8 @@ export default function PublicProfilePage() {
               ) : (
                 <div className="space-y-4">
                   {profile.achievements.map((achievement, idx) => (
-                    <article 
-                      key={achievement.id || idx} 
+                    <article
+                      key={achievement.id || idx}
                       className="project-card p-6"
                       data-testid={`public-achievement-${idx}`}
                     >
@@ -264,7 +301,7 @@ export default function PublicProfilePage() {
                       <p className="text-muted-foreground text-sm mb-3">
                         {achievement.description}
                       </p>
-                      
+
                       <div className="flex items-center gap-4 text-sm">
                         {achievement.date && (
                           <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -297,10 +334,11 @@ export default function PublicProfilePage() {
       <footer className="relative z-10 py-8 border-t border-white/10">
         <div className="max-w-5xl mx-auto px-6 lg:px-8 text-center">
           <p className="text-sm text-muted-foreground">
-            Powered by <Link to="/" className="text-white hover:underline">DevFolio</Link>
+            Powered by <Link to="/" className="text-white hover:underline tracking-widest">REZUM</Link>
           </p>
         </div>
       </footer>
+
       {/* Project Detail Dialog */}
       <Dialog open={!!selectedProject} onOpenChange={(open) => !open && setSelectedProject(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto bg-[#0a0a0a] border-white/10 text-white rounded-sm p-0 gap-0">
@@ -333,9 +371,20 @@ export default function PublicProfilePage() {
                       <ExternalLink className="w-5 h-5" />
                     </a>
                   )}
+                  {selectedProject?.video_link && (
+                    <a
+                      href={selectedProject.video_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"
+                      title="Video"
+                    >
+                      <Video className="w-5 h-5" />
+                    </a>
+                  )}
                 </div>
               </div>
-              
+
               {selectedProject?.tech_stack?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selectedProject.tech_stack.map((tech, idx) => (
@@ -375,10 +424,10 @@ export default function PublicProfilePage() {
               )}
             </div>
           </div>
-          
+
           <div className="p-4 border-t border-white/5 bg-[#0a0a0a] flex justify-end">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setSelectedProject(null)}
               className="border-white/10 text-white hover:bg-white/5 rounded-sm text-xs font-mono"
             >
