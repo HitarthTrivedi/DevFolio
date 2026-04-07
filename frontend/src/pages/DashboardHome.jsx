@@ -52,7 +52,8 @@ export default function DashboardHome() {
   }, [getAuthHeaders]);
 
   const getExportUrl = () => {
-    return `${process.env.REACT_APP_BACKEND_URL}/api/export/${user?.unique_slug}?sections=${exportSection}`;
+    // Uses the current domain (e.g. your-site.vercel.app) making the URL much shorter/cleaner
+    return `${window.location.origin}/api/export/${user?.unique_slug}?sections=${exportSection}`;
   };
 
   const copyToClipboard = async () => {

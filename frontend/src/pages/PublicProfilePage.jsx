@@ -45,7 +45,8 @@ export default function PublicProfilePage() {
     fetchProfile();
   }, [slug]);
 
-  const exportUrl = `${process.env.REACT_APP_BACKEND_URL}/api/export/${slug}`;
+  // Uses your own domain instead of the render.com domain for better appearance
+  const exportUrl = `${window.location.origin}/api/export/${slug}`;
 
   const copyExportUrl = async () => {
     try {
