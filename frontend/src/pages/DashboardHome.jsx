@@ -148,9 +148,9 @@ export default function DashboardHome() {
       <div className="project-card p-8" data-testid="export-section">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h2 className="font-sans text-lg font-medium mb-2">AI Export URL</h2>
+            <h2 className="font-sans text-lg font-medium mb-2">Data Export URL</h2>
             <p className="text-muted-foreground text-sm">
-              Share this URL with any AI to let it access your portfolio data
+              Share this structured JSON URL with recruiters or tools to let them access your portfolio data
             </p>
           </div>
         </div>

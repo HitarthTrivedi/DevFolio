@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     client.close()
 
 # Create the main app
-app = FastAPI(title="REZUM API", description="AI-Readable Portfolio Platform", lifespan=lifespan)
+app = FastAPI(title="REZUM API", description="Structured Portfolio Data Platform", lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")

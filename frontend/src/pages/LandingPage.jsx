@@ -41,15 +41,14 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-sm font-mono text-muted-foreground mb-4 fade-in opacity-0 stagger-1">
-              // Your portfolio, AI-ready
+              // Your work, perfectly structured
             </p>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] mb-6 fade-in opacity-0 stagger-2">
-              Share your work with
-              <span className="block text-muted-foreground">any AI, instantly.</span>
+              The minimalist portfolio for
+              <span className="block text-muted-foreground">modern developers.</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl mb-10 fade-in opacity-0 stagger-3">
-              Upload your projects and achievements once. Get a unique URL that any AI agent can read. 
-              Generate resumes, portfolios, or cover letters without manual input.
+              Upload your projects and achievements in one place. Get a clean public profile and a unique URL to share your structured data with any tool or platform.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 fade-in opacity-0 stagger-4">
@@ -82,7 +81,7 @@ export default function LandingPage() {
           <div className="mb-16">
             <p className="text-sm font-mono text-muted-foreground mb-4">// Features</p>
             <h2 className="font-serif text-3xl sm:text-4xl font-medium">
-              Built for the AI age
+              Simple, clean, and shareable
             </h2>
           </div>
           
@@ -92,9 +91,9 @@ export default function LandingPage() {
               <div className="w-12 h-12 flex items-center justify-center border border-white/10 mb-6">
                 <Zap className="w-5 h-5" strokeWidth={1.5} />
               </div>
-              <h3 className="font-sans text-lg font-medium mb-3">One-Click Export</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">One-Link Sharing</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Generate a unique URL for your portfolio. Share it with ChatGPT, Claude, or any AI to let them access your complete work history.
+                Generate a unique URL for your portfolio data. Share it with recruiters, platforms, or tools to let them access your complete work history instantly.
               </p>
             </div>
             
@@ -103,9 +102,9 @@ export default function LandingPage() {
               <div className="w-12 h-12 flex items-center justify-center border border-white/10 mb-6">
                 <Link2 className="w-5 h-5" strokeWidth={1.5} />
               </div>
-              <h3 className="font-sans text-lg font-medium mb-3">Section Filtering</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">Modular Export</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Choose what to share. Export only projects, only achievements, or both. Control exactly what AI sees.
+                Choose what to show. Export only projects, only achievements, or your entire history. You have full control over your public data.
               </p>
             </div>
             
@@ -114,9 +113,9 @@ export default function LandingPage() {
               <div className="w-12 h-12 flex items-center justify-center border border-white/10 mb-6">
                 <FileJson className="w-5 h-5" strokeWidth={1.5} />
               </div>
-              <h3 className="font-sans text-lg font-medium mb-3">Structured Data</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">Clean JSON Format</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Clean JSON output optimized for AI consumption. Your README, tech stack, and links—all perfectly formatted.
+                Need your data in a machine-readable format? Our clean JSON export is optimized for any developer tool or AI agent you want to use.
               </p>
             </div>
           </div>
@@ -129,32 +128,32 @@ export default function LandingPage() {
           <div className="mb-16">
             <p className="text-sm font-mono text-muted-foreground mb-4">// How it works</p>
             <h2 className="font-serif text-3xl sm:text-4xl font-medium">
-              Three steps to AI-ready
+              Your professional snapshot
             </h2>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             <div className="fade-in opacity-0 stagger-1">
               <div className="font-mono text-4xl text-muted-foreground/30 mb-4">01</div>
-              <h3 className="font-sans text-lg font-medium mb-3">Add Your Work</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">Centralize Your Work</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Upload projects with README content, tech stack, and links. Add achievements with dates and certificates.
+                Upload projects with READMEs and tech stacks. Add achievements and links to certificates in one dashboard.
               </p>
             </div>
             
             <div className="fade-in opacity-0 stagger-2">
               <div className="font-mono text-4xl text-muted-foreground/30 mb-4">02</div>
-              <h3 className="font-sans text-lg font-medium mb-3">Get Your URL</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">Get a Permanent Link</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Each profile gets a unique, permanent URL. Copy it from your dashboard whenever you need it.
+                Each profile gets a unique, permanent URL. Copy it from your dashboard whenever you need to share your history.
               </p>
             </div>
             
             <div className="fade-in opacity-0 stagger-3">
               <div className="font-mono text-4xl text-muted-foreground/30 mb-4">03</div>
-              <h3 className="font-sans text-lg font-medium mb-3">Share with AI</h3>
+              <h3 className="font-sans text-lg font-medium mb-3">Share Anywhere</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Paste your export URL into any AI chat. Ask it to create resumes, cover letters, or portfolio pages.
+                Paste your export URL into AI tools, resume builders, or send it directly to recruiters for a detailed view of your work.
               </p>
             </div>
           </div>
@@ -165,17 +164,17 @@ export default function LandingPage() {
       <section className="py-20 lg:py-32 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 text-center">
           <h2 className="font-serif text-3xl sm:text-4xl font-medium mb-6">
-            Ready to simplify your workflow?
+            Ready to simplify your portfolio?
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto mb-10">
-            Stop copying and pasting your project details. Let AI do the heavy lifting.
+            Stop manually copying your project details. Keep your history in a format that works for you and your tools.
           </p>
           <Link to="/register">
             <Button 
               className="bg-white text-black hover:bg-gray-200 rounded-sm px-10 py-6 text-base font-medium"
               data-testid="cta-button"
             >
-              Create Your REZUM
+              Get Started with REZUM
             </Button>
           </Link>
         </div>

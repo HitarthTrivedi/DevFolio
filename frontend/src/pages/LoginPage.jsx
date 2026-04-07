@@ -162,7 +162,7 @@ export default function LoginPage() {
         <div className="text-center px-12">
           <div className="font-mono text-6xl text-muted-foreground/20 mb-6">{'{ }'}</div>
           <p className="font-serif text-2xl text-muted-foreground">
-            Your work, AI-ready
+            Your work, simplified
           </p>
         </div>
       </div>

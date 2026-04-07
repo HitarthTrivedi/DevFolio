@@ -131,7 +131,7 @@ export default function PublicProfilePage() {
               ) : (
                 <>
                   <Copy className="w-4 h-4 mr-2" />
-                  Copy AI Export URL
+                  Copy Data URL
                 </>
               )}
             </Button>
