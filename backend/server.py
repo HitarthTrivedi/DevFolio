@@ -24,9 +24,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
+# IMPORTANT: Set JWT_SECRET in your production environment variables (Render/Vercel)
+# If not set, a random one is generated, which will log everyone out whenever the server restarts.
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev_secret_key_change_me_in_production')
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 168  # Increased to 7 days for better "Keep me logged in" experience
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -224,6 +226,7 @@ async def login(credentials: UserLogin):
         email=user["email"],
         name=user["name"],
         unique_slug=user["unique_slug"],
+        github_username=user.get("github_username"),
         created_at=user["created_at"]
     )
     
