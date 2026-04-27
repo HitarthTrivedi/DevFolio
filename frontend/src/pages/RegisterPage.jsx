@@ -5,17 +5,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Github } from 'lucide-react';
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [keepSignedIn, setKeepSignedIn] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [githubLoading, setGithubLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  const handleGitHubSignIn = async () => {
+    setGithubLoading(true);
+    try {
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/github/callback`);
+      const { data } = await axios.get(`${API_URL}/auth/github/login/authorize?redirect_uri=${redirectUri}`);
+      window.location.href = data.url;
+    } catch (err) {
+      if (err.response?.status === 501) {
+        toast.error('GitHub sign-in is not configured on this server.');
+      } else {
+        toast.error('Could not connect to GitHub');
+      }
+      setGithubLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,8 +84,30 @@ export default function RegisterPage() {
           <div className="mb-10">
             <h1 className="font-serif text-3xl font-medium mb-3">Create your account</h1>
             <p className="text-muted-foreground">
-              Start building your AI-ready portfolio on REZUM
+              Start building your portfolio on REZUM
             </p>
+          </div>
+
+          {/* GitHub Sign Up */}
+          <Button
+            type="button"
+            onClick={handleGitHubSignIn}
+            disabled={githubLoading}
+            variant="outline"
+            className="w-full border-white/20 text-white hover:bg-white/5 rounded-sm h-12 font-medium gap-2 mb-8"
+          >
+            <Github className="w-5 h-5" />
+            {githubLoading ? 'Redirecting...' : 'Continue with GitHub'}
+          </Button>
+
+          {/* Divider */}
+          <div className="relative mb-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-[#050505] px-4 text-xs text-muted-foreground">or create account with email</span>
+            </div>
           </div>
 
           {/* Form */}

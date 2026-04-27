@@ -22,6 +22,11 @@ import GitHubCalendar from '@/components/GitHubCalendar';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+const toAbsoluteUrl = (url) => {
+  if (!url) return url;
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+};
+
 export default function PublicProfilePage() {
   const { slug } = useParams();
   const [profile, setProfile] = useState(null);
@@ -244,7 +249,7 @@ export default function PublicProfilePage() {
                       <div className="flex items-center gap-4 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         {project.github_link && (
                           <a
-                            href={project.github_link}
+                            href={toAbsoluteUrl(project.github_link)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-white transition-colors"
@@ -255,7 +260,7 @@ export default function PublicProfilePage() {
                         )}
                         {project.live_demo_link && (
                           <a
-                            href={project.live_demo_link}
+                            href={toAbsoluteUrl(project.live_demo_link)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-white transition-colors"
@@ -266,7 +271,7 @@ export default function PublicProfilePage() {
                         )}
                         {project.video_link && (
                           <a
-                            href={project.video_link}
+                            href={toAbsoluteUrl(project.video_link)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-white transition-colors"
@@ -352,7 +357,7 @@ export default function PublicProfilePage() {
                 <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
                   {selectedProject?.github_link && (
                     <a
-                      href={selectedProject.github_link}
+                      href={toAbsoluteUrl(selectedProject.github_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"
@@ -363,7 +368,7 @@ export default function PublicProfilePage() {
                   )}
                   {selectedProject?.live_demo_link && (
                     <a
-                      href={selectedProject.live_demo_link}
+                      href={toAbsoluteUrl(selectedProject.live_demo_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"
@@ -374,7 +379,7 @@ export default function PublicProfilePage() {
                   )}
                   {selectedProject?.video_link && (
                     <a
-                      href={selectedProject.video_link}
+                      href={toAbsoluteUrl(selectedProject.video_link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 border border-white/10 rounded-sm hover:bg-white/5 transition-colors text-muted-foreground hover:text-white"

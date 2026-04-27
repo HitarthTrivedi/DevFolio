@@ -12,7 +12,9 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import hashlib
 import jwt
-import secrets                                                                                
+import secrets
+import httpx
+from urllib.parse import quote
 from contextlib import asynccontextmanager
 
 ROOT_DIR = Path(__file__).parent
@@ -28,7 +30,10 @@ db = client[os.environ['DB_NAME']]
 # If not set, a random one is generated, which will log everyone out whenever the server restarts.
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev_secret_key_change_me_in_production')
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 168  # Increased to 7 days for better "Keep me logged in" experience
+JWT_EXPIRATION_HOURS = 168  # 7 days
+
+GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID', '')
+GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET', '')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,6 +78,9 @@ class TokenResponse(BaseModel):
 
 class GitHubConnectRequest(BaseModel):
     github_username: str
+
+class GitHubCallbackRequest(BaseModel):
+    code: str
 
 class ProjectBase(BaseModel):
     title: str
@@ -259,6 +267,168 @@ async def connect_github(data: GitHubConnectRequest, current_user: dict = Depend
         unique_slug=updated["unique_slug"],
         github_username=updated.get("github_username"),
         created_at=updated["created_at"]
+    )
+
+@api_router.get("/auth/github/login/authorize")
+async def github_login_authorize(redirect_uri: str):
+    """Get GitHub OAuth URL for sign-in. No authentication required."""
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="GitHub OAuth not configured. Add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to the server .env.")
+    state = "login_" + secrets.token_hex(8)
+    auth_url = (
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={GITHUB_CLIENT_ID}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
+        f"&scope=user:email"
+        f"&state={state}"
+    )
+    return {"url": auth_url}
+
+
+class GitHubLoginCallbackRequest(BaseModel):
+    code: str
+
+
+@api_router.post("/auth/github/login/callback", response_model=TokenResponse)
+async def github_login_callback(data: GitHubLoginCallbackRequest):
+    """Sign in or create an account using GitHub OAuth. No authentication required."""
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="GitHub OAuth not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        token_res = await http.post(
+            "https://github.com/login/oauth/access_token",
+            json={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET, "code": data.code},
+            headers={"Accept": "application/json"},
+        )
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail=token_data.get("error_description", "Could not obtain GitHub access token"))
+
+        gh_res = await http.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github.v3+json"},
+        )
+        gh = gh_res.json()
+        github_username = gh.get("login")
+        github_id = str(gh.get("id", ""))
+        github_name = gh.get("name") or github_username
+
+        emails_res = await http.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github.v3+json"},
+        )
+        emails = emails_res.json() if emails_res.status_code == 200 else []
+        primary_email = None
+        if isinstance(emails, list):
+            primary_email = next(
+                (e["email"] for e in emails if e.get("primary") and e.get("verified")), None
+            )
+            if not primary_email and emails:
+                primary_email = emails[0].get("email")
+        if not primary_email:
+            primary_email = gh.get("email")
+
+    if not github_username:
+        raise HTTPException(status_code=400, detail="Could not retrieve GitHub username")
+    if not primary_email:
+        raise HTTPException(status_code=400, detail="Could not retrieve a verified email from GitHub. Make sure your GitHub account has a public or verified email.")
+
+    primary_email = primary_email.lower()
+
+    # Find existing user by github_id first, then by email
+    user = await db.users.find_one({"github_id": github_id}, {"_id": 0})
+    if not user:
+        user = await db.users.find_one({"email": primary_email}, {"_id": 0})
+
+    if user:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"github_id": github_id, "github_username": github_username}}
+        )
+        user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    else:
+        user_id = str(uuid.uuid4())
+        unique_slug = generate_unique_slug(github_name)
+        while await db.users.find_one({"unique_slug": unique_slug}):
+            unique_slug = generate_unique_slug(github_name)
+        user = {
+            "id": user_id,
+            "email": primary_email,
+            "name": github_name,
+            "password_hash": secrets.token_hex(32),
+            "unique_slug": unique_slug,
+            "github_id": github_id,
+            "github_username": github_username,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(user)
+
+    jwt_token = create_token(user["id"])
+    return TokenResponse(
+        access_token=jwt_token,
+        user=UserResponse(
+            id=user["id"],
+            email=user["email"],
+            name=user["name"],
+            unique_slug=user["unique_slug"],
+            github_username=user.get("github_username"),
+            created_at=user["created_at"],
+        ),
+    )
+
+
+@api_router.get("/auth/github/authorize")
+async def github_authorize(redirect_uri: str, current_user: dict = Depends(get_current_user)):
+    """Return GitHub OAuth authorization URL."""
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in the backend .env.")
+    auth_url = (
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={GITHUB_CLIENT_ID}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
+        f"&scope=read:user"
+        f"&state={current_user['id']}"
+    )
+    return {"url": auth_url}
+
+@api_router.post("/auth/github/callback", response_model=UserResponse)
+async def github_oauth_callback(data: GitHubCallbackRequest, current_user: dict = Depends(get_current_user)):
+    """Exchange GitHub OAuth code for the user's GitHub username and save it."""
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="GitHub OAuth not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        token_res = await http.post(
+            "https://github.com/login/oauth/access_token",
+            json={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET, "code": data.code},
+            headers={"Accept": "application/json"},
+        )
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            detail = token_data.get("error_description", "Could not obtain access token")
+            raise HTTPException(status_code=400, detail=detail)
+
+        user_res = await http.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github.v3+json"},
+        )
+        github_username = user_res.json().get("login")
+
+    if not github_username:
+        raise HTTPException(status_code=400, detail="Could not retrieve GitHub username")
+
+    await db.users.update_one({"id": current_user["id"]}, {"$set": {"github_username": github_username}})
+    updated = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    return UserResponse(
+        id=updated["id"],
+        email=updated["email"],
+        name=updated["name"],
+        unique_slug=updated["unique_slug"],
+        github_username=updated.get("github_username"),
+        created_at=updated["created_at"],
     )
 
 # ============ PROJECT ROUTES ============

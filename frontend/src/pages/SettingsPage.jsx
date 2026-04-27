@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/AuthContext';
-import { Copy, Check, ExternalLink, Github, Unlink } from 'lucide-react';
+import { Copy, Check, ExternalLink, Github, Unlink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -14,33 +14,38 @@ export default function SettingsPage() {
   const [copiedExport, setCopiedExport] = useState(false);
   const [githubInput, setGithubInput] = useState(user?.github_username || '');
   const [githubSaving, setGithubSaving] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [localGithub, setLocalGithub] = useState(user?.github_username || null);
 
   const profileUrl = `${window.location.origin}/profile/${user?.unique_slug}`;
   const exportUrl = `${process.env.REACT_APP_BACKEND_URL}/api/export/${user?.unique_slug}`;
 
-  const copyToClipboard = async (text, type) => {
+  const handleOAuthConnect = async () => {
+    setOauthLoading(true);
     try {
-      await navigator.clipboard.writeText(text);
-      if (type === 'slug') {
-        setCopiedSlug(true);
-        setTimeout(() => setCopiedSlug(false), 2000);
+      const redirectUri = encodeURIComponent(
+        `${window.location.origin}/auth/github/callback`
+      );
+      const { data } = await axios.get(
+        `${API_URL}/auth/github/authorize?redirect_uri=${redirectUri}`,
+        { headers: getAuthHeaders() }
+      );
+      window.location.href = data.url;
+    } catch (err) {
+      if (err.response?.status === 501) {
+        setShowManual(true);
+        toast.info('GitHub OAuth not set up. Enter your username manually.');
       } else {
-        setCopiedExport(true);
-        setTimeout(() => setCopiedExport(false), 2000);
+        toast.error('Could not start GitHub connection');
       }
-      toast.success('Copied to clipboard!');
-    } catch (error) {
-      toast.error('Failed to copy');
+      setOauthLoading(false);
     }
   };
 
-  const handleGithubConnect = async () => {
+  const handleManualSave = async () => {
     const trimmed = githubInput.trim().replace(/^@/, '');
-    if (!trimmed) {
-      toast.error('Please enter a GitHub username');
-      return;
-    }
+    if (!trimmed) { toast.error('Enter a GitHub username'); return; }
     setGithubSaving(true);
     try {
       await axios.patch(
@@ -51,8 +56,9 @@ export default function SettingsPage() {
       setLocalGithub(trimmed);
       await refreshUser();
       toast.success(`Connected to @${trimmed}`);
-    } catch (err) {
-      toast.error('Failed to connect GitHub');
+      setShowManual(false);
+    } catch {
+      toast.error('Failed to save GitHub username');
     } finally {
       setGithubSaving(false);
     }
@@ -70,10 +76,21 @@ export default function SettingsPage() {
       setGithubInput('');
       await refreshUser();
       toast.success('GitHub disconnected');
-    } catch (err) {
+    } catch {
       toast.error('Failed to disconnect GitHub');
     } finally {
       setGithubSaving(false);
+    }
+  };
+
+  const copyToClipboard = async (text, type) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === 'slug') { setCopiedSlug(true); setTimeout(() => setCopiedSlug(false), 2000); }
+      else { setCopiedExport(true); setTimeout(() => setCopiedExport(false), 2000); }
+      toast.success('Copied to clipboard!');
+    } catch {
+      toast.error('Failed to copy');
     }
   };
 
@@ -88,26 +105,23 @@ export default function SettingsPage() {
       {/* Profile Info */}
       <section className="project-card p-8 mb-8">
         <h2 className="font-sans text-lg font-medium mb-6">Profile Information</h2>
-
         <div className="space-y-6">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Name</label>
             <p className="text-lg">{user?.name}</p>
           </div>
-
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Email</label>
             <p className="text-lg">{user?.email}</p>
           </div>
-
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Member since</label>
             <p className="text-lg">
-              {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              }) : '—'}
+              {user?.created_at
+                ? new Date(user.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric'
+                  })
+                : '—'}
             </p>
           </div>
         </div>
@@ -122,12 +136,18 @@ export default function SettingsPage() {
           <div>
             <h2 className="font-sans text-lg font-medium mb-1">GitHub Integration</h2>
             <p className="text-sm text-muted-foreground">
-              Connect your GitHub account to display your contribution calendar and auto-sync public repos in your dashboard.
+              Connect your GitHub account to display your contribution calendar on your profile.
             </p>
           </div>
         </div>
 
-        {localGithub ? (
+        {oauthLoading ? (
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Connecting to GitHub...
+          </div>
+        ) : localGithub ? (
+          /* Connected state */
           <div className="space-y-4">
             <div className="flex items-center gap-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-sm">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
@@ -141,21 +161,15 @@ export default function SettingsPage() {
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
-            <div className="flex gap-3">
-              <Input
-                value={githubInput}
-                onChange={(e) => setGithubInput(e.target.value)}
-                placeholder="Change username..."
-                className="bg-transparent border-white/20 rounded-sm flex-1"
-                data-testid="github-username-input"
-              />
+            <div className="flex flex-wrap gap-3">
               <Button
-                onClick={handleGithubConnect}
+                onClick={handleOAuthConnect}
                 disabled={githubSaving}
                 variant="outline"
-                className="border-white/20 rounded-sm"
+                className="border-white/20 rounded-sm text-sm"
               >
-                Update
+                <Github className="w-4 h-4 mr-2" />
+                Reconnect
               </Button>
               <Button
                 onClick={handleGithubDisconnect}
@@ -170,22 +184,44 @@ export default function SettingsPage() {
             </div>
           </div>
         ) : (
-          <div className="flex gap-3">
-            <Input
-              value={githubInput}
-              onChange={(e) => setGithubInput(e.target.value)}
-              placeholder="Your GitHub username (e.g. torvalds)"
-              className="bg-transparent border-white/20 rounded-sm flex-1"
-              data-testid="github-username-input"
-            />
+          /* Not connected state */
+          <div className="space-y-4">
             <Button
-              onClick={handleGithubConnect}
-              disabled={githubSaving}
+              onClick={handleOAuthConnect}
               className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
               data-testid="github-connect-button"
             >
-              {githubSaving ? 'Connecting...' : 'Connect'}
+              <Github className="w-4 h-4 mr-2" />
+              Connect with GitHub
             </Button>
+
+            {!showManual ? (
+              <button
+                onClick={() => setShowManual(true)}
+                className="block text-xs text-muted-foreground hover:text-white transition-colors underline underline-offset-2"
+              >
+                Enter username manually instead
+              </button>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                <Input
+                  value={githubInput}
+                  onChange={(e) => setGithubInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleManualSave()}
+                  placeholder="Your GitHub username (e.g. torvalds)"
+                  className="bg-transparent border-white/20 rounded-sm sm:flex-1"
+                  data-testid="github-username-input"
+                />
+                <Button
+                  onClick={handleManualSave}
+                  disabled={githubSaving}
+                  variant="outline"
+                  className="border-white/20 rounded-sm flex-shrink-0"
+                >
+                  {githubSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -198,74 +234,36 @@ export default function SettingsPage() {
         </p>
 
         <div className="space-y-6">
-          {/* Profile URL */}
           <div>
-            <label className="text-sm text-muted-foreground mb-2 block">
-              Public Profile URL
-            </label>
+            <label className="text-sm text-muted-foreground mb-2 block">Public Profile URL</label>
             <div className="export-url-box flex items-center justify-between gap-4">
-              <code className="text-sm text-muted-foreground flex-1 truncate">
-                {profileUrl}
-              </code>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => copyToClipboard(profileUrl, 'slug')}
-                  data-testid="copy-profile-url"
-                >
-                  {copiedSlug ? (
-                    <Check className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
+              <code className="text-sm text-muted-foreground flex-1 truncate">{profileUrl}</code>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(profileUrl, 'slug')} data-testid="copy-profile-url">
+                  {copiedSlug ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                 </Button>
-                <a
-                  href={profileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-white transition-colors"
-                >
+                <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-white transition-colors">
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
             </div>
           </div>
 
-          {/* AI Export URL */}
           <div>
-            <label className="text-sm text-muted-foreground mb-2 block">
-              AI Export URL (JSON)
-            </label>
+            <label className="text-sm text-muted-foreground mb-2 block">Data Export URL (JSON)</label>
             <div className="export-url-box flex items-center justify-between gap-4">
-              <code className="text-sm text-muted-foreground flex-1 truncate">
-                {exportUrl}
-              </code>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => copyToClipboard(exportUrl, 'export')}
-                  data-testid="copy-export-url"
-                >
-                  {copiedExport ? (
-                    <Check className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
+              <code className="text-sm text-muted-foreground flex-1 truncate">{exportUrl}</code>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button variant="ghost" size="icon" onClick={() => copyToClipboard(exportUrl, 'export')} data-testid="copy-export-url">
+                  {copiedExport ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                 </Button>
-                <a
-                  href={exportUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-white transition-colors"
-                >
+                <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-white transition-colors">
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Add <code className="text-white">?sections=projects</code> or <code className="text-white">?sections=achievements</code> to filter
+              Append <code className="text-white">?sections=projects</code> or <code className="text-white">?sections=achievements</code> to filter
             </p>
           </div>
         </div>
@@ -277,7 +275,6 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Your unique slug is used in all your public URLs
         </p>
-
         <div className="inline-block">
           <span className="font-mono text-lg px-4 py-2 bg-white/5 border border-white/10">
             {user?.unique_slug}

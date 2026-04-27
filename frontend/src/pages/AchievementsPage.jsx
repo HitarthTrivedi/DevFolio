@@ -151,14 +151,14 @@ export default function AchievementsPage() {
   return (
     <div className="p-8 lg:p-12" data-testid="achievements-page">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <p className="text-sm font-mono text-muted-foreground mb-2">// Achievements</p>
           <h1 className="font-serif text-3xl font-medium">Your Achievements</h1>
         </div>
         <Button
           onClick={openCreateModal}
-          className="bg-white text-black hover:bg-gray-200 rounded-sm px-6"
+          className="bg-white text-black hover:bg-gray-200 rounded-sm px-6 w-fit"
           data-testid="add-achievement-button"
         >
           <Plus className="w-4 h-4 mr-2" />

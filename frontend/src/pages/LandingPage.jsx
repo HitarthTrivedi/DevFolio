@@ -186,7 +186,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <span className="font-serif text-lg tracking-widest">REZUM</span>
-              <span className="text-muted-foreground text-sm">— AI-ready portfolios</span>
+              <span className="text-muted-foreground text-sm">— your work, structured</span>
             </div>
             
             <div className="flex items-center gap-6">

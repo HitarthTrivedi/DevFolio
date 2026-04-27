@@ -13,6 +13,7 @@ import ProjectsPage from "@/pages/ProjectsPage";
 import AchievementsPage from "@/pages/AchievementsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
+import GitHubCallbackPage from "@/pages/GitHubCallbackPage";
 
 // Components
 import { GrainOverlay } from "@/components/GrainOverlay";
@@ -71,6 +72,7 @@ function AppRoutes() {
         </PublicRoute>
       } />
       <Route path="/profile/:slug" element={<PublicProfilePage />} />
+      <Route path="/auth/github/callback" element={<GitHubCallbackPage />} />
       
       {/* Protected Routes */}
       <Route path="/dashboard" element={
