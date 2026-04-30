@@ -111,6 +111,7 @@ class ProjectResponse(ProjectBase):
     created_at: str
     updated_at: str
     is_hackathon: Optional[bool] = False
+    team_name: Optional[str] = ""
 
 class AchievementBase(BaseModel):
     title: str
@@ -546,6 +547,7 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
             "id": hp["id"],
             "user_id": current_user["id"],
             "title": hp["title"],
+            "team_name": hp.get("team_name", ""),
             "description": hp["description"],
             "readme_content": hp.get("readme_content", ""),
             "tech_stack": hp.get("tech_stack", []),
@@ -691,6 +693,7 @@ async def get_public_profile(slug: str, sections: str = "all"):
             projects.append({
                 "id": hp["id"],
                 "title": hp["title"],
+                "team_name": hp.get("team_name", ""),
                 "description": hp["description"],
                 "readme_content": hp.get("readme_content", ""),
                 "tech_stack": hp.get("tech_stack", []),
@@ -768,6 +771,7 @@ async def export_for_ai(slug: str, sections: str = "all", format: str = "json"):
         for hp in hack_projects:
             export_data["projects"].append({
                 "title": hp["title"],
+                "team_name": hp.get("team_name", ""),
                 "description": hp["description"],
                 "readme_content": hp.get("readme_content", ""),
                 "tech_stack": hp.get("tech_stack", []),

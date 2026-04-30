@@ -284,7 +284,9 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <div key={project.id} className="project-card p-6" data-testid={`project-card-${project.id}`}>
               <div className="flex items-start justify-between mb-4">
-                <h3 className="font-sans text-lg font-medium flex items-center gap-3">
+                <div>
+                  {project.team_name && <p className="text-xs font-mono text-muted-foreground mb-1">{project.team_name}</p>}
+                  <h3 className="font-sans text-lg font-medium flex items-center gap-3">
                   {project.title}
                   {project.is_hackathon && (
                     <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -292,6 +294,7 @@ export default function ProjectsPage() {
                     </span>
                   )}
                 </h3>
+                </div>
                 <div className="flex items-center gap-2">
                   {project.is_hackathon ? (
                     <Link to="/dashboard/hackathons" className="text-xs font-mono text-muted-foreground hover:text-white transition-colors border border-white/10 px-2 py-1 rounded hover:bg-white/5">
