@@ -284,7 +284,7 @@ export default function DashboardHome() {
     };
 
     fetchStats();
-  }, [getAuthHeaders]);
+  }, [getAuthHeaders, user?.unique_slug]);
 
   const getExportUrl = () =>
     `${API_URL}/export/${user?.unique_slug}?sections=${exportSection}`;

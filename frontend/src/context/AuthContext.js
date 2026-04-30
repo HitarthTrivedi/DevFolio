@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     const savedToken = getSavedToken();
     if (!savedToken) return;
     try {
@@ -85,11 +85,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       // silently fail
     }
-  };
+  }, []);
 
-  const getAuthHeaders = () => ({
+  const getAuthHeaders = useCallback(() => ({
     Authorization: `Bearer ${token}`
-  });
+  }), [token]);
 
   return (
     <AuthContext.Provider value={{
