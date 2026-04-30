@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 import {
@@ -283,14 +284,29 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <div key={project.id} className="project-card p-6" data-testid={`project-card-${project.id}`}>
               <div className="flex items-start justify-between mb-4">
-                <h3 className="font-sans text-lg font-medium">{project.title}</h3>
+                <h3 className="font-sans text-lg font-medium flex items-center gap-3">
+                  {project.title}
+                  {project.is_hackathon && (
+                    <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
+                      Hackathon
+                    </span>
+                  )}
+                </h3>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => openEditModal(project)} className="text-muted-foreground hover:text-white" data-testid={`edit-project-${project.id}`}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => { setProjectToDelete(project); setDeleteDialogOpen(true); }} className="text-muted-foreground hover:text-red-500" data-testid={`delete-project-${project.id}`}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {project.is_hackathon ? (
+                    <Link to="/dashboard/hackathons" className="text-xs font-mono text-muted-foreground hover:text-white transition-colors border border-white/10 px-2 py-1 rounded hover:bg-white/5">
+                      Manage →
+                    </Link>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" onClick={() => openEditModal(project)} className="text-muted-foreground hover:text-white" data-testid={`edit-project-${project.id}`}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setProjectToDelete(project); setDeleteDialogOpen(true); }} className="text-muted-foreground hover:text-red-500" data-testid={`delete-project-${project.id}`}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 

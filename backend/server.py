@@ -110,6 +110,7 @@ class ProjectResponse(ProjectBase):
     user_id: str
     created_at: str
     updated_at: str
+    is_hackathon: Optional[bool] = False
 
 class AchievementBase(BaseModel):
     title: str
@@ -528,7 +529,35 @@ async def get_projects(current_user: dict = Depends(get_current_user)):
     projects = await db.projects.find(
         {"user_id": current_user["id"]}, 
         {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    ).to_list(100)
+    
+    hack_projects = await db.hackathon_projects.find(
+        {
+            "$or": [
+                {"team_leader_id": current_user["id"]},
+                {"team_members.user_id": current_user["id"]}
+            ]
+        },
+        {"_id": 0}
+    ).to_list(100)
+
+    for hp in hack_projects:
+        projects.append({
+            "id": hp["id"],
+            "user_id": current_user["id"],
+            "title": hp["title"],
+            "description": hp["description"],
+            "readme_content": hp.get("readme_content", ""),
+            "tech_stack": hp.get("tech_stack", []),
+            "github_link": hp.get("github_link", ""),
+            "live_demo_link": hp.get("live_demo_link", ""),
+            "video_link": hp.get("video_link", ""),
+            "created_at": hp.get("created_at", ""),
+            "updated_at": hp.get("updated_at", ""),
+            "is_hackathon": True
+        })
+
+    projects.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return projects
 
 @api_router.get("/projects/{project_id}", response_model=ProjectResponse)
@@ -647,6 +676,33 @@ async def get_public_profile(slug: str, sections: str = "all"):
             {"user_id": user["id"]},
             {"_id": 0, "user_id": 0}
         ).to_list(100)
+        
+        hack_projects = await db.hackathon_projects.find(
+            {
+                "$or": [
+                    {"team_leader_id": user["id"]},
+                    {"team_members.user_id": user["id"]}
+                ]
+            },
+            {"_id": 0, "user_id": 0}
+        ).to_list(100)
+        
+        for hp in hack_projects:
+            projects.append({
+                "id": hp["id"],
+                "title": hp["title"],
+                "description": hp["description"],
+                "readme_content": hp.get("readme_content", ""),
+                "tech_stack": hp.get("tech_stack", []),
+                "github_link": hp.get("github_link", ""),
+                "live_demo_link": hp.get("live_demo_link", ""),
+                "video_link": hp.get("video_link", ""),
+                "created_at": hp.get("created_at", ""),
+                "updated_at": hp.get("updated_at", ""),
+                "is_hackathon": True
+            })
+            
+        projects.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         response["projects"] = projects
     
     if sections in ["all", "achievements"]:
@@ -698,7 +754,31 @@ async def export_for_ai(slug: str, sections: str = "all", format: str = "json"):
             "live_demo_link": p.get("live_demo_link", ""),
             "created_at": p.get("created_at", "")
         } for p in projects]
-        export_data["metadata"]["total_projects"] = len(projects)
+        
+        hack_projects = await db.hackathon_projects.find(
+            {
+                "$or": [
+                    {"team_leader_id": user["id"]},
+                    {"team_members.user_id": user["id"]}
+                ]
+            },
+            {"_id": 0, "user_id": 0}
+        ).to_list(100)
+        
+        for hp in hack_projects:
+            export_data["projects"].append({
+                "title": hp["title"],
+                "description": hp["description"],
+                "readme_content": hp.get("readme_content", ""),
+                "tech_stack": hp.get("tech_stack", []),
+                "github_link": hp.get("github_link", ""),
+                "live_demo_link": hp.get("live_demo_link", ""),
+                "created_at": hp.get("created_at", ""),
+                "is_hackathon": True
+            })
+            
+        export_data["projects"].sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        export_data["metadata"]["total_projects"] = len(export_data["projects"])
     
     if sections in ["all", "achievements"]:
         achievements = await db.achievements.find(
