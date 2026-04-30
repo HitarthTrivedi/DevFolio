@@ -69,6 +69,7 @@ class UserResponse(BaseModel):
     name: str
     unique_slug: str
     github_username: Optional[str] = None
+    is_admin: bool = False
     created_at: str
 
 class TokenResponse(BaseModel):
@@ -143,6 +144,100 @@ class AIExportResponse(BaseModel):
     achievements: Optional[List[dict]] = None
     metadata: dict
 
+# --- Hackathon models ---
+
+class HackathonWinner(BaseModel):
+    position: int  # 1, 2, 3
+    team_name: str
+    hackathon_project_id: str
+    prize: Optional[str] = ""
+
+class HackathonBase(BaseModel):
+    name: str
+    description: str
+    theme: Optional[str] = ""
+    rules: Optional[str] = ""
+    prizes: Optional[str] = ""
+    start_date: str   # ISO datetime string e.g. "2025-06-01T09:00"
+    end_date: str
+    registration_deadline: Optional[str] = ""
+    submission_deadline: Optional[str] = ""  # when projects must be submitted
+    status: str = "draft"  # draft | upcoming | active | past
+    registration_link: Optional[str] = ""
+
+class HackathonCreate(HackathonBase):
+    pass
+
+class HackathonUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    theme: Optional[str] = None
+    rules: Optional[str] = None
+    prizes: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    registration_deadline: Optional[str] = None
+    submission_deadline: Optional[str] = None
+    status: Optional[str] = None
+    registration_link: Optional[str] = None
+    winners: Optional[List[HackathonWinner]] = None
+
+class HackathonResponse(HackathonBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    winners: List[HackathonWinner] = []
+    created_at: str
+    updated_at: str
+
+class TeamMemberInput(BaseModel):
+    rezum_url: str  # e.g. "https://rezum.app/profile/john-doe-abc1" or just slug
+
+class HackathonProjectBase(BaseModel):
+    hackathon_id: str
+    title: str
+    description: str
+    readme_content: Optional[str] = ""
+    tech_stack: List[str] = []
+    github_link: Optional[str] = ""
+    live_demo_link: Optional[str] = ""
+    video_link: Optional[str] = ""
+    team_members: List[TeamMemberInput] = []
+
+class HackathonProjectCreate(HackathonProjectBase):
+    pass
+
+class HackathonProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    readme_content: Optional[str] = None
+    tech_stack: Optional[List[str]] = None
+    github_link: Optional[str] = None
+    live_demo_link: Optional[str] = None
+    video_link: Optional[str] = None
+    team_members: Optional[List[TeamMemberInput]] = None
+
+class ResolvedMember(BaseModel):
+    rezum_url: str
+    slug: str
+    name: Optional[str] = None
+    user_id: Optional[str] = None
+
+class HackathonProjectResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    hackathon_id: str
+    team_leader_id: str
+    title: str
+    description: str
+    readme_content: str = ""
+    tech_stack: List[str] = []
+    github_link: str = ""
+    live_demo_link: str = ""
+    video_link: str = ""
+    team_members: List[ResolvedMember] = []
+    created_at: str
+    updated_at: str
+
 # ============ HELPERS ============
 
 def hash_password(password: str) -> str:
@@ -172,7 +267,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        
+
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
@@ -181,6 +276,29 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def require_admin(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+def _user_to_response(user: dict) -> UserResponse:
+    return UserResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        unique_slug=user["unique_slug"],
+        github_username=user.get("github_username"),
+        is_admin=user.get("is_admin", False),
+        created_at=user["created_at"],
+    )
+
+def _extract_slug(rezum_url: str) -> str:
+    """Extract unique_slug from a rezum URL or return as-is if already a slug."""
+    url = rezum_url.strip().rstrip('/')
+    if '/profile/' in url:
+        return url.split('/profile/')[-1]
+    return url
 
 # ============ AUTH ROUTES ============
 
@@ -209,17 +327,9 @@ async def register(user_data: UserCreate):
     }
     
     await db.users.insert_one(user_doc)
-    
+
     token = create_token(user_id)
-    user_response = UserResponse(
-        id=user_id,
-        email=normalized_email,
-        name=user_data.name,
-        unique_slug=unique_slug,
-        created_at=user_doc["created_at"]
-    )
-    
-    return TokenResponse(access_token=token, user=user_response)
+    return TokenResponse(access_token=token, user=_user_to_response(user_doc))
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
@@ -229,27 +339,11 @@ async def login(credentials: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     token = create_token(user["id"])
-    user_response = UserResponse(
-        id=user["id"],
-        email=user["email"],
-        name=user["name"],
-        unique_slug=user["unique_slug"],
-        github_username=user.get("github_username"),
-        created_at=user["created_at"]
-    )
-    
-    return TokenResponse(access_token=token, user=user_response)
+    return TokenResponse(access_token=token, user=_user_to_response(user))
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    return UserResponse(
-        id=current_user["id"],
-        email=current_user["email"],
-        name=current_user["name"],
-        unique_slug=current_user["unique_slug"],
-        github_username=current_user.get("github_username"),
-        created_at=current_user["created_at"]
-    )
+    return _user_to_response(current_user)
 
 @api_router.patch("/auth/github", response_model=UserResponse)
 async def connect_github(data: GitHubConnectRequest, current_user: dict = Depends(get_current_user)):
@@ -260,14 +354,7 @@ async def connect_github(data: GitHubConnectRequest, current_user: dict = Depend
         {"$set": {"github_username": username}}
     )
     updated = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
-    return UserResponse(
-        id=updated["id"],
-        email=updated["email"],
-        name=updated["name"],
-        unique_slug=updated["unique_slug"],
-        github_username=updated.get("github_username"),
-        created_at=updated["created_at"]
-    )
+    return _user_to_response(updated)
 
 @api_router.get("/auth/github/login/authorize")
 async def github_login_authorize(redirect_uri: str):
@@ -366,17 +453,7 @@ async def github_login_callback(data: GitHubLoginCallbackRequest):
         await db.users.insert_one(user)
 
     jwt_token = create_token(user["id"])
-    return TokenResponse(
-        access_token=jwt_token,
-        user=UserResponse(
-            id=user["id"],
-            email=user["email"],
-            name=user["name"],
-            unique_slug=user["unique_slug"],
-            github_username=user.get("github_username"),
-            created_at=user["created_at"],
-        ),
-    )
+    return TokenResponse(access_token=jwt_token, user=_user_to_response(user))
 
 
 @api_router.get("/auth/github/authorize")
@@ -422,14 +499,7 @@ async def github_oauth_callback(data: GitHubCallbackRequest, current_user: dict 
 
     await db.users.update_one({"id": current_user["id"]}, {"$set": {"github_username": github_username}})
     updated = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
-    return UserResponse(
-        id=updated["id"],
-        email=updated["email"],
-        name=updated["name"],
-        unique_slug=updated["unique_slug"],
-        github_username=updated.get("github_username"),
-        created_at=updated["created_at"],
-    )
+    return _user_to_response(updated)
 
 # ============ PROJECT ROUTES ============
 
@@ -642,6 +712,163 @@ async def export_for_ai(slug: str, sections: str = "all", format: str = "json"):
     
     return export_data
 
+# ============ ADMIN ROUTES ============
+
+@api_router.get("/admin/hackathons", response_model=List[HackathonResponse])
+async def admin_list_hackathons(admin_user: dict = Depends(require_admin)):
+    hackathons = await db.hackathons.find({}, {"_id": 0}).sort("start_date", -1).to_list(200)
+    return hackathons
+
+@api_router.patch("/admin/users/{user_id}/make-admin")
+async def make_admin(user_id: str, admin_user: dict = Depends(require_admin)):
+    await db.users.update_one({"id": user_id}, {"$set": {"is_admin": True}})
+    return {"message": "User granted admin"}
+
+@api_router.get("/admin/users")
+async def list_users(admin_user: dict = Depends(require_admin)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
+    return users
+
+# ============ HACKATHON ROUTES ============
+
+async def _resolve_team_members(members: List[TeamMemberInput]) -> List[ResolvedMember]:
+    resolved = []
+    for m in members:
+        slug = _extract_slug(m.rezum_url)
+        user = await db.users.find_one({"unique_slug": slug}, {"_id": 0})
+        resolved.append(ResolvedMember(
+            rezum_url=m.rezum_url,
+            slug=slug,
+            name=user["name"] if user else None,
+            user_id=user["id"] if user else None,
+        ))
+    return resolved
+
+# --- Public hackathon listing ---
+
+@api_router.get("/hackathons", response_model=List[HackathonResponse])
+async def list_hackathons(status: Optional[str] = None):
+    if status and status != "all":
+        query = {"status": status}
+    else:
+        query = {"status": {"$ne": "draft"}}
+    hackathons = await db.hackathons.find(query, {"_id": 0}).sort("start_date", -1).to_list(100)
+    return hackathons
+
+@api_router.get("/hackathons/{hackathon_id}", response_model=HackathonResponse)
+async def get_hackathon(hackathon_id: str):
+    h = await db.hackathons.find_one({"id": hackathon_id}, {"_id": 0})
+    if not h:
+        raise HTTPException(status_code=404, detail="Hackathon not found")
+    return h
+
+# --- Admin hackathon CRUD ---
+
+@api_router.post("/admin/hackathons", response_model=HackathonResponse)
+async def create_hackathon(data: HackathonCreate, admin_user: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "winners": [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hackathons.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+@api_router.put("/admin/hackathons/{hackathon_id}", response_model=HackathonResponse)
+async def update_hackathon(hackathon_id: str, data: HackathonUpdate, admin_user: dict = Depends(require_admin)):
+    existing = await db.hackathons.find_one({"id": hackathon_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Hackathon not found")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "winners" in update:
+        update["winners"] = [w.model_dump() for w in data.winners]
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.hackathons.update_one({"id": hackathon_id}, {"$set": update})
+    updated = await db.hackathons.find_one({"id": hackathon_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/admin/hackathons/{hackathon_id}")
+async def delete_hackathon(hackathon_id: str, admin_user: dict = Depends(require_admin)):
+    result = await db.hackathons.delete_one({"id": hackathon_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Hackathon not found")
+    return {"message": "Hackathon deleted"}
+
+@api_router.get("/admin/hackathons/{hackathon_id}/submissions")
+async def get_hackathon_submissions(hackathon_id: str, admin_user: dict = Depends(require_admin)):
+    projects = await db.hackathon_projects.find(
+        {"hackathon_id": hackathon_id}, {"_id": 0}
+    ).to_list(200)
+    return projects
+
+# --- Hackathon project submissions (team leader) ---
+
+@api_router.post("/hackathon-projects", response_model=HackathonProjectResponse)
+async def create_hackathon_project(data: HackathonProjectCreate, current_user: dict = Depends(get_current_user)):
+    hackathon = await db.hackathons.find_one({"id": data.hackathon_id})
+    if not hackathon:
+        raise HTTPException(status_code=404, detail="Hackathon not found")
+
+    resolved = await _resolve_team_members(data.team_members)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "hackathon_id": data.hackathon_id,
+        "team_leader_id": current_user["id"],
+        "title": data.title,
+        "description": data.description,
+        "readme_content": data.readme_content or "",
+        "tech_stack": data.tech_stack,
+        "github_link": data.github_link or "",
+        "live_demo_link": data.live_demo_link or "",
+        "video_link": data.video_link or "",
+        "team_members": [m.model_dump() for m in resolved],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hackathon_projects.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+@api_router.get("/hackathon-projects/my", response_model=List[HackathonProjectResponse])
+async def get_my_hackathon_projects(current_user: dict = Depends(get_current_user)):
+    """Returns hackathon projects where user is the team leader."""
+    projects = await db.hackathon_projects.find(
+        {"team_leader_id": current_user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return projects
+
+@api_router.get("/hackathon-projects/member", response_model=List[HackathonProjectResponse])
+async def get_member_hackathon_projects(current_user: dict = Depends(get_current_user)):
+    """Returns hackathon projects where user is a team member (by user_id in resolved members)."""
+    projects = await db.hackathon_projects.find(
+        {"team_members.user_id": current_user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return projects
+
+@api_router.put("/hackathon-projects/{project_id}", response_model=HackathonProjectResponse)
+async def update_hackathon_project(project_id: str, data: HackathonProjectUpdate, current_user: dict = Depends(get_current_user)):
+    existing = await db.hackathon_projects.find_one({"id": project_id, "team_leader_id": current_user["id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found or not authorized")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "team_members" in update:
+        resolved = await _resolve_team_members(data.team_members)
+        update["team_members"] = [m.model_dump() for m in resolved]
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.hackathon_projects.update_one({"id": project_id}, {"$set": update})
+    updated = await db.hackathon_projects.find_one({"id": project_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/hackathon-projects/{project_id}")
+async def delete_hackathon_project(project_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.hackathon_projects.delete_one({"id": project_id, "team_leader_id": current_user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found or not authorized")
+    return {"message": "Hackathon project deleted"}
+
 # ============ HEALTH CHECK ============
 
 @api_router.get("/")
@@ -669,3 +896,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)

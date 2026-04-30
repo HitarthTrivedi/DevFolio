@@ -5,7 +5,9 @@
       "Bash(npm run *)",
       "Bash(xargs cat *)",
       "Bash(pip install *)",
-      "Bash(python -c \"import httpx; print\\('httpx', httpx.__version__\\)\")"
+      "Bash(python -c \"import httpx; print\\('httpx', httpx.__version__\\)\")",
+      "Bash(python make_admin.py)",
+      "Bash(del *)"
     ]
   }
 }

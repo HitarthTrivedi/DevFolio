@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Zap, Link2, FileJson, Github, ExternalLink } from 'lucide-react';
+import { ArrowRight, Zap, Link2, FileJson, Github, LayoutDashboard, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LandingPage() {
+  const { user, loading } = useAuth();
+
   return (
     <div className="min-h-screen bg-[#050505] relative">
       {/* Animated Gradient Background */}
@@ -20,17 +23,42 @@ export default function LandingPage() {
             </Link>
             
             <div className="flex items-center gap-6">
-              <Link to="/login" className="nav-link text-sm font-medium" data-testid="nav-login">
-                Sign In
-              </Link>
-              <Link to="/register">
-                <Button 
-                  className="bg-white text-black hover:bg-gray-200 rounded-sm px-6 font-medium"
-                  data-testid="nav-register"
-                >
-                  Get Started
-                </Button>
-              </Link>
+              {!loading && user ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-sm bg-white/5">
+                      <User className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                    </div>
+                    <div className="hidden sm:block">
+                      <p className="text-sm font-medium leading-none">{user.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
+                    </div>
+                  </div>
+                  <Link to="/dashboard">
+                    <Button
+                      className="bg-white text-black hover:bg-gray-200 rounded-sm px-6 font-medium inline-flex items-center gap-2"
+                      data-testid="nav-dashboard"
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Dashboard
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="nav-link text-sm font-medium" data-testid="nav-login">
+                    Sign In
+                  </Link>
+                  <Link to="/register">
+                    <Button
+                      className="bg-white text-black hover:bg-gray-200 rounded-sm px-6 font-medium"
+                      data-testid="nav-register"
+                    >
+                      Get Started
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -52,24 +80,49 @@ export default function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 fade-in opacity-0 stagger-4">
-              <Link to="/register">
-                <Button 
-                  className="bg-white text-black hover:bg-gray-200 rounded-sm px-8 py-6 text-base font-medium inline-flex items-center gap-2"
-                  data-testid="hero-cta"
-                >
-                  Start Building
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-              <Link to="/profile/demo-user-1234">
-                <Button 
-                  variant="outline"
-                  className="border-white/20 text-white hover:bg-white/5 rounded-sm px-8 py-6 text-base"
-                  data-testid="hero-demo"
-                >
-                  View Demo Profile
-                </Button>
-              </Link>
+              {user ? (
+                <>
+                  <Link to="/dashboard">
+                    <Button
+                      className="bg-white text-black hover:bg-gray-200 rounded-sm px-8 py-6 text-base font-medium inline-flex items-center gap-2"
+                      data-testid="hero-cta"
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                  <Link to={`/profile/${user.unique_slug}`} target="_blank">
+                    <Button
+                      variant="outline"
+                      className="border-white/20 text-white hover:bg-white/5 rounded-sm px-8 py-6 text-base"
+                      data-testid="hero-profile"
+                    >
+                      View My Profile
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/register">
+                    <Button
+                      className="bg-white text-black hover:bg-gray-200 rounded-sm px-8 py-6 text-base font-medium inline-flex items-center gap-2"
+                      data-testid="hero-cta"
+                    >
+                      Start Building
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Link to="/profile/demo-user-1234">
+                    <Button
+                      variant="outline"
+                      className="border-white/20 text-white hover:bg-white/5 rounded-sm px-8 py-6 text-base"
+                      data-testid="hero-demo"
+                    >
+                      View Demo Profile
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -14,6 +14,9 @@ import AchievementsPage from "@/pages/AchievementsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import PublicProfilePage from "@/pages/PublicProfilePage";
 import GitHubCallbackPage from "@/pages/GitHubCallbackPage";
+import HackathonsPage from "@/pages/HackathonsPage";
+import HackathonExplore from "@/pages/HackathonExplore";
+import AdminPage from "@/pages/AdminPage";
 
 // Components
 import { GrainOverlay } from "@/components/GrainOverlay";
@@ -84,6 +87,9 @@ function AppRoutes() {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="achievements" element={<AchievementsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="hackathons" element={<HackathonsPage />} />
+        <Route path="explore" element={<HackathonExplore />} />
+        <Route path="admin" element={<AdminPage />} />
       </Route>
       
       {/* Fallback */}

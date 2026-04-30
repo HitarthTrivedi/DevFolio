@@ -9,7 +9,10 @@ import {
   LogOut,
   ExternalLink,
   Menu,
-  X
+  X,
+  Trophy,
+  Compass,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -27,7 +30,10 @@ export default function DashboardLayout() {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Overview', end: true },
     { to: '/dashboard/projects', icon: FolderKanban, label: 'Projects' },
     { to: '/dashboard/achievements', icon: Award, label: 'Achievements' },
+    { to: '/dashboard/hackathons', icon: Trophy, label: 'Hackathons' },
+    { to: '/dashboard/explore', icon: Compass, label: 'Explore' },
     { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
+    ...(user?.is_admin ? [{ to: '/dashboard/admin', icon: ShieldCheck, label: 'Admin' }] : []),
   ];
 
   return (
