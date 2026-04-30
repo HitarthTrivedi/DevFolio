@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Trophy, Calendar, Clock, ChevronDown, ChevronUp, Zap, Flag, Archive } from 'lucide-react';
+import {
+  Trophy, Calendar, Users, ArrowRight
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -13,22 +16,61 @@ const STATUS_COLORS = {
   draft:    'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
 };
 
-const STATUS_ICON = {
-  active: Zap,
-  upcoming: Clock,
-  past: Archive,
-  draft: Flag,
+const STATUS_DOT = {
+  active:   'bg-green-400',
+  upcoming: 'bg-blue-400',
+  past:     'bg-white/20',
+  draft:    'bg-yellow-400',
 };
+
+function parseDate(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return { label: 'Ended', urgent: false };
+  const s = Math.floor(ms / 1000);
+  const days  = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins  = Math.floor((s % 3600) / 60);
+  const secs  = s % 60;
+  if (days > 0)  return { label: `${days}d ${hours}h ${mins}m`, urgent: days < 1 };
+  if (hours > 0) return { label: `${hours}h ${mins}m ${secs}s`, urgent: hours < 6 };
+  return { label: `${mins}m ${secs}s`, urgent: true };
+}
+
+function progressPercent(start, end, now) {
+  const s = parseDate(start), e = parseDate(end);
+  if (!s || !e) return 0;
+  const total = e - s;
+  if (total <= 0) return 100;
+  return Math.min(100, Math.max(0, ((now - s) / total) * 100));
+}
+
+const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 export default function HackathonExplore() {
   const [hackathons, setHackathons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all | active | upcoming | past
-  const [expandedId, setExpandedId] = useState(null);
+  const [teamCounts, setTeamCounts] = useState({});
+  const [loading, setLoading]   = useState(true);
+  const [now, setNow]           = useState(Date.now());
 
   useEffect(() => {
-    axios.get(`${API_URL}/hackathons`)
-      .then(res => setHackathons(res.data))
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      axios.get(`${API_URL}/hackathons`),
+      axios.get(`${API_URL}/hackathons/team-counts`).catch(() => ({ data: {} })),
+    ])
+      .then(([hackRes, countsRes]) => {
+        setHackathons(hackRes.data);
+        setTeamCounts(countsRes.data || {});
+      })
       .catch(() => toast.error('Failed to load hackathons'))
       .finally(() => setLoading(false));
   }, []);
@@ -36,216 +78,228 @@ export default function HackathonExplore() {
   const formatDate = (d) => {
     if (!d) return '—';
     try {
-      const dt = new Date(d);
-      const hasTime = d.includes('T') && !d.endsWith('T00:00') && !d.endsWith('T00:00:00');
-      if (hasTime) {
-        return dt.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
-      }
-      return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      return new Date(d).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      });
     } catch { return d; }
   };
 
-  const daysUntil = (d) => {
-    if (!d) return null;
-    const diff = new Date(d) - new Date();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days;
-  };
-
-  const filtered = filter === 'all'
-    ? hackathons
-    : hackathons.filter(h => h.status === filter);
-
-  // Group by status for timeline display
   const active   = hackathons.filter(h => h.status === 'active');
   const upcoming = hackathons.filter(h => h.status === 'upcoming');
   const past     = hackathons.filter(h => h.status === 'past');
 
-  if (loading) {
-    return <div className="p-8 lg:p-12 text-muted-foreground">Loading...</div>;
-  }
+  if (loading) return <div className="p-8 lg:p-12 text-muted-foreground">Loading…</div>;
 
   return (
     <div className="p-8 lg:p-12">
       {/* Header */}
       <div className="mb-10">
-        <p className="text-sm font-mono text-muted-foreground mb-2">// Hackathon Explorer</p>
-        <h1 className="font-serif text-3xl font-medium">Hackathons</h1>
+        <p className="text-sm font-mono text-muted-foreground mb-2">// Explore</p>
+        <h1 className="font-serif text-3xl font-medium">Hackathon Hub</h1>
         <p className="text-muted-foreground text-sm mt-2">
-          Browse all hackathons — ongoing, upcoming, and past. See timelines, themes, and winners.
+          A live overview of every hackathon — past, present, and upcoming.
+          To submit a project or view full details, head to{' '}
+          <Link to="/dashboard/hackathons" className="text-white underline underline-offset-2">My Hackathons →</Link>
         </p>
       </div>
 
-      {/* Summary row */}
+      {/* Stats row */}
       <div className="grid grid-cols-3 gap-4 mb-10">
         {[
-          { label: 'Active Now', count: active.length, color: 'text-green-400' },
-          { label: 'Upcoming', count: upcoming.length, color: 'text-blue-400' },
-          { label: 'Past', count: past.length, color: 'text-muted-foreground' },
-        ].map(({ label, count, color }) => (
+          { label: 'Active Now',  count: active.length,   color: 'text-green-400',         dot: 'bg-green-400' },
+          { label: 'Upcoming',    count: upcoming.length, color: 'text-blue-400',           dot: 'bg-blue-400' },
+          { label: 'Completed',   count: past.length,     color: 'text-muted-foreground',   dot: 'bg-white/20' },
+        ].map(({ label, count, color, dot }) => (
           <div key={label} className="project-card p-5 text-center">
-            <p className={`font-mono text-3xl font-medium mb-1 ${color}`}>{count}</p>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+              <p className={`font-mono text-3xl font-medium ${color}`}>{count}</p>
+            </div>
             <p className="text-muted-foreground text-xs">{label}</p>
           </div>
         ))}
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-2 mb-8 flex-wrap">
-        {['all', 'active', 'upcoming', 'past'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 text-sm rounded-sm border transition-colors capitalize ${
-              filter === f
-                ? 'bg-white text-black border-white'
-                : 'border-white/20 text-muted-foreground hover:border-white/40 hover:text-white'
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      {/* Active hackathons — featured */}
+      {active.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <p className="text-xs font-mono text-green-400 uppercase tracking-widest">Live Now</p>
+          </div>
+          <div className="space-y-3">
+            {active.map(hack => {
+              const endMs = parseDate(hack.end_date) ? parseDate(hack.end_date) - now : null;
+              const pct   = progressPercent(hack.start_date, hack.end_date, now);
+              const { label: cd, urgent } = endMs != null && endMs > 0
+                ? formatCountdown(endMs)
+                : { label: 'Ended', urgent: false };
+              const count = teamCounts[hack.id] || 0;
 
-      {filtered.length === 0 ? (
-        <div className="empty-state">
-          <Trophy className="w-12 h-12 text-muted-foreground/20 mb-4" strokeWidth={1} />
-          <p className="text-lg mb-2">No hackathons in this category</p>
-          <p className="text-sm text-muted-foreground">Check back soon.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map(hack => {
-            const isExpanded = expandedId === hack.id;
-            const Icon = STATUS_ICON[hack.status] || Flag;
-            const days = daysUntil(hack.status === 'upcoming' ? hack.start_date : hack.end_date);
-
-            return (
-              <div key={hack.id} className="project-card overflow-hidden">
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
-                    <div className="w-10 h-10 flex items-center justify-center border border-white/10 flex-shrink-0">
-                      <Icon className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
-                    </div>
-
+              return (
+                <div key={hack.id} className="project-card p-5 border-green-500/15">
+                  <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1 flex-wrap">
-                        <h2 className="font-sans text-lg font-medium">{hack.name}</h2>
-                        <span className={`text-xs px-2 py-0.5 rounded border font-mono ${STATUS_COLORS[hack.status] || STATUS_COLORS.past}`}>
-                          {hack.status}
-                        </span>
-                        {hack.status === 'active' && days !== null && days >= 0 && (
-                          <span className="text-xs text-green-400 font-mono">{days}d left</span>
-                        )}
-                        {hack.status === 'upcoming' && days !== null && days >= 0 && (
-                          <span className="text-xs text-blue-400 font-mono">starts in {days}d</span>
-                        )}
-                      </div>
-
-                      <p className="text-muted-foreground text-sm mb-3 whitespace-pre-line">{hack.description}</p>
-
-                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                        {hack.start_date && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {formatDate(hack.start_date)} → {formatDate(hack.end_date)}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="font-sans text-base font-medium">{hack.name}</h3>
                         {hack.theme && (
-                          <span>Theme: <span className="text-white">{hack.theme}</span></span>
-                        )}
-                        {hack.registration_deadline && (
-                          <span className="text-orange-400">
-                            Reg. closes: {formatDate(hack.registration_deadline)}
+                          <span className="text-xs text-muted-foreground border border-white/10 px-2 py-0.5 rounded-sm">
+                            {hack.theme}
                           </span>
                         )}
-                        {hack.submission_deadline && (
-                          <span className="text-yellow-400">
-                            Submit by: {formatDate(hack.submission_deadline)}
+                        {count > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                            <Users className="w-3 h-3" />{count} team{count !== 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
-                      
-                      {hack.registration_link && (
-                        <div className="mt-4">
-                          <Button asChild variant="outline" className="border-white/20 hover:bg-white hover:text-black rounded-sm h-8 px-3 text-xs">
-                            <a href={hack.registration_link} target="_blank" rel="noopener noreferrer">
-                              Register Here ↗
-                            </a>
-                          </Button>
-                        </div>
-                      )}
+                      <p className="text-muted-foreground text-sm line-clamp-1">
+                        {hack.description?.split('\n')[0]}
+                      </p>
                     </div>
-
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : hack.id)}
-                      className="p-2 text-muted-foreground hover:text-white transition-colors flex-shrink-0"
-                    >
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`font-mono text-lg font-semibold leading-none ${urgent ? 'text-red-400' : 'text-green-400'}`}>
+                        {cd}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">until end</p>
+                    </div>
                   </div>
+                  {/* Progress bar */}
+                  <div>
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                      <span>{formatDate(hack.start_date)}</span>
+                      <span className="font-mono text-green-400/80">{Math.round(pct)}% elapsed</span>
+                      <span>{formatDate(hack.end_date)}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${urgent ? 'bg-red-500' : 'bg-green-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                  {hack.registration_link && (
+                    <div className="mt-3">
+                      <Button asChild variant="outline" size="sm" className="border-green-500/30 text-green-400 hover:bg-green-500/10 rounded-sm h-7 text-xs px-3">
+                        <a href={hack.registration_link} target="_blank" rel="noopener noreferrer">Register ↗</a>
+                      </Button>
+                    </div>
+                  )}
                 </div>
-
-                {/* Expanded details */}
-                {isExpanded && (
-                  <div className="border-t border-white/10">
-                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Details */}
-                      <div className="space-y-4">
-                        {hack.prizes && (
-                          <div>
-                            <p className="text-xs font-mono text-muted-foreground mb-2">// Prizes</p>
-                            <p className="text-sm">{hack.prizes}</p>
-                          </div>
-                        )}
-                        {hack.rules && (
-                          <div>
-                            <p className="text-xs font-mono text-muted-foreground mb-2">// Rules</p>
-                            <p className="text-sm text-muted-foreground whitespace-pre-line">{hack.rules}</p>
-                          </div>
-                        )}
-                        {!hack.prizes && !hack.rules && (
-                          <p className="text-sm text-muted-foreground">No additional details.</p>
-                        )}
-                      </div>
-
-                      {/* Winners */}
-                      <div>
-                        <p className="text-xs font-mono text-muted-foreground mb-3">// Winners</p>
-                        {hack.winners?.length > 0 ? (
-                          <div className="space-y-3">
-                            {hack.winners.sort((a, b) => a.position - b.position).map(w => (
-                              <div key={w.position} className="flex items-center gap-3">
-                                <div className={`w-8 h-8 flex items-center justify-center border font-mono text-sm flex-shrink-0 ${
-                                  w.position === 1 ? 'border-yellow-400/50 text-yellow-400' :
-                                  w.position === 2 ? 'border-gray-300/50 text-gray-300' :
-                                  w.position === 3 ? 'border-orange-400/50 text-orange-400' :
-                                  'border-white/10 text-muted-foreground'
-                                }`}>
-                                  {w.position}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium">{w.team_name}</p>
-                                  {w.prize && <p className="text-xs text-muted-foreground">{w.prize}</p>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {hack.status === 'past' ? 'No winners announced.' : 'Winners will be announced after the hackathon.'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
+
+      {/* Full timeline list */}
+      {hackathons.length > 0 && (
+        <div className="mb-10">
+          <p className="text-xs font-mono text-muted-foreground mb-4 uppercase tracking-widest">// All Hackathons</p>
+          <div className="space-y-2">
+            {hackathons.map(hack => {
+              const isActive   = hack.status === 'active';
+              const isUpcoming = hack.status === 'upcoming';
+              const count      = teamCounts[hack.id] || 0;
+
+              const mainMs = isActive
+                ? (parseDate(hack.end_date)   ? parseDate(hack.end_date)   - now : null)
+                : isUpcoming
+                ? (parseDate(hack.start_date) ? parseDate(hack.start_date) - now : null)
+                : null;
+
+              const { label: cd, urgent } = mainMs != null && mainMs > 0
+                ? formatCountdown(mainMs)
+                : { label: '', urgent: false };
+
+              return (
+                <div key={hack.id} className="project-card px-5 py-4 flex items-center gap-4">
+                  {/* Status dot */}
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[hack.status] || 'bg-white/20'} ${isActive ? 'animate-pulse' : ''}`} />
+
+                  {/* Name + dates */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{hack.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[hack.status] || STATUS_COLORS.past}`}>
+                        {hack.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                      {hack.start_date && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(hack.start_date)} → {formatDate(hack.end_date)}
+                        </span>
+                      )}
+                      {hack.theme && <span>Theme: <span className="text-white/70">{hack.theme}</span></span>}
+                      {count > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />{count} team{count !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {/* Past winners summary */}
+                      {hack.status === 'past' && hack.winners?.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          {hack.winners
+                            .sort((a, b) => a.position - b.position)
+                            .slice(0, 3)
+                            .map(w => (
+                              <span key={w.position} className="font-medium">
+                                {MEDAL[w.position] || `#${w.position}`} {w.team_name}
+                              </span>
+                            ))
+                            .reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`s${i}`} className="opacity-30">·</span>, el], [])}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Countdown or days ago */}
+                  {(isActive || isUpcoming) && cd && (
+                    <div className="text-right flex-shrink-0">
+                      <p className={`font-mono text-sm font-medium ${
+                        urgent ? 'text-red-400' : isActive ? 'text-green-400' : 'text-blue-400'
+                      }`}>{cd}</p>
+                      <p className="text-xs text-muted-foreground">{isActive ? 'left' : 'to start'}</p>
+                    </div>
+                  )}
+
+                  {/* Register button */}
+                  {hack.registration_link && (isActive || isUpcoming) && (
+                    <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-white rounded-sm h-7 text-xs px-2 flex-shrink-0">
+                      <a href={hack.registration_link} target="_blank" rel="noopener noreferrer">
+                        Register ↗
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {hackathons.length === 0 && (
+        <div className="empty-state">
+          <Trophy className="w-12 h-12 text-muted-foreground/20 mb-4" strokeWidth={1} />
+          <p className="text-lg mb-2">No hackathons yet</p>
+          <p className="text-sm text-muted-foreground">Check back soon.</p>
+        </div>
+      )}
+
+      {/* CTA to Hackathons page */}
+      <div className="project-card p-6 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium mb-1">Ready to participate?</p>
+          <p className="text-xs text-muted-foreground">Submit your project, track your submissions, and see results on the Hackathons page.</p>
+        </div>
+        <Link to="/dashboard/hackathons">
+          <Button className="bg-white text-black hover:bg-gray-200 rounded-sm px-5 flex-shrink-0">
+            My Hackathons <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }

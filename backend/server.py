@@ -833,6 +833,13 @@ async def _resolve_team_members(members: List[TeamMemberInput]) -> List[Resolved
 
 # --- Public hackathon listing ---
 
+@api_router.get("/hackathons/team-counts")
+async def get_hackathon_team_counts():
+    """Returns a map of hackathon_id → submitted team count."""
+    pipeline = [{"$group": {"_id": "$hackathon_id", "count": {"$sum": 1}}}]
+    results = await db.hackathon_projects.aggregate(pipeline).to_list(500)
+    return {item["_id"]: item["count"] for item in results}
+
 @api_router.get("/hackathons", response_model=List[HackathonResponse])
 async def list_hackathons(status: Optional[str] = None):
     if status and status != "all":

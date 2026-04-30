@@ -104,19 +104,23 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    color: #888;
+    padding: 0.625rem 0.875rem;
+    color: #666;
     transition: color 0.2s ease, background-color 0.2s ease;
+    border-radius: 0.25rem;
+    position: relative;
+    border-left: 2px solid transparent;
 }
 
 .sidebar-link:hover {
-    color: #ededed;
-    background: rgba(255, 255, 255, 0.03);
+    color: #ccc;
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar-link.active {
     color: #ededed;
     background: rgba(255, 255, 255, 0.08);
+    border-left-color: #fff;
 }
 
 /* Export URL Box */

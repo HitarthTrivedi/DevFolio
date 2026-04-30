@@ -26,15 +26,37 @@ export default function DashboardLayout() {
     navigate('/');
   };
 
-  const navItems = [
+  const mainNavItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Overview', end: true },
     { to: '/dashboard/projects', icon: FolderKanban, label: 'Projects' },
     { to: '/dashboard/achievements', icon: Award, label: 'Achievements' },
     { to: '/dashboard/hackathons', icon: Trophy, label: 'Hackathons' },
     { to: '/dashboard/explore', icon: Compass, label: 'Explore' },
     { to: '/dashboard/settings', icon: Settings, label: 'Settings' },
-    ...(user?.is_admin ? [{ to: '/dashboard/admin', icon: ShieldCheck, label: 'Admin' }] : []),
   ];
+
+  const adminNavItems = user?.is_admin
+    ? [{ to: '/dashboard/admin', icon: ShieldCheck, label: 'Admin Panel' }]
+    : [];
+
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
+  const NavItem = ({ item }) => (
+    <li>
+      <NavLink
+        to={item.to}
+        end={item.end}
+        onClick={() => setSidebarOpen(false)}
+        className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+        data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
+      >
+        <item.icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+        <span className="text-sm font-medium">{item.label}</span>
+      </NavLink>
+    </li>
+  );
 
   return (
     <div className="min-h-screen bg-[#050505]">
@@ -62,15 +84,15 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-64 border-r border-white/10 flex flex-col bg-[#050505] z-50 transition-transform duration-300 ease-out
+        className={`fixed top-0 left-0 h-screen w-60 border-r border-white/10 flex flex-col bg-[#050505] z-50 transition-transform duration-300 ease-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0`}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-white/10">
+        <div className="h-16 flex items-center px-5 border-b border-white/10">
           <NavLink
             to="/"
-            className="font-serif text-xl font-medium tracking-widest"
+            className="font-serif text-xl font-medium tracking-widest hover:opacity-80 transition-opacity"
             onClick={() => setSidebarOpen(false)}
           >
             REZUM
@@ -78,66 +100,68 @@ export default function DashboardLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-6 px-3">
-          <ul className="space-y-1">
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) =>
-                    `sidebar-link ${isActive ? 'active' : ''}`
-                  }
-                  data-testid={`nav-${item.label.toLowerCase()}`}
-                >
-                  <item.icon className="w-5 h-5" strokeWidth={1.5} />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </NavLink>
-              </li>
-            ))}
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
+          <ul className="space-y-0.5">
+            {mainNavItems.map(item => <NavItem key={item.to} item={item} />)}
           </ul>
+
+          {adminNavItems.length > 0 && (
+            <>
+              <div className="my-4 border-t border-white/8" />
+              <p className="px-3 mb-1.5 text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest">
+                Admin
+              </p>
+              <ul className="space-y-0.5">
+                {adminNavItems.map(item => <NavItem key={item.to} item={item} />)}
+              </ul>
+            </>
+          )}
         </nav>
 
-        {/* Profile URL */}
+        {/* Public profile link */}
         {user?.unique_slug && (
-          <div className="px-4 py-4 border-t border-white/10">
-            <p className="text-xs text-muted-foreground mb-2">Your public profile</p>
+          <div className="px-4 py-3 border-t border-white/10">
+            <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest mb-1.5">Public Profile</p>
             <NavLink
               to={`/profile/${user.unique_slug}`}
               target="_blank"
-              className="flex items-center gap-2 text-sm text-white hover:underline"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
               data-testid="public-profile-link"
               onClick={() => setSidebarOpen(false)}
             >
               <span className="truncate font-mono text-xs">/{user.unique_slug}</span>
-              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+              <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
             </NavLink>
           </div>
         )}
 
         {/* User Info & Logout */}
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+        <div className="p-3 border-t border-white/10">
+          <div className="flex items-center gap-3">
+            {/* Avatar */}
+            <div className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-mono font-medium text-white/80">{initials}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate text-white/90">{user?.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="flex-shrink-0 text-muted-foreground hover:text-white"
+              className="flex-shrink-0 w-7 h-7 text-muted-foreground hover:text-white"
               data-testid="logout-button"
+              title="Log out"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
             </Button>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+      <main className="lg:ml-60 pt-14 lg:pt-0 min-h-screen">
         <Outlet />
       </main>
     </div>

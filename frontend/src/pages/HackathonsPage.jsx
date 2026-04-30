@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
@@ -46,34 +45,160 @@ const emptyForm = {
   team_members: [],
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseDate(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return { label: 'Ended', urgent: false };
+  const s = Math.floor(ms / 1000);
+  const days  = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins  = Math.floor((s % 3600) / 60);
+  const secs  = s % 60;
+  if (days > 0)  return { label: `${days}d ${hours}h ${mins}m`, urgent: days < 1 };
+  if (hours > 0) return { label: `${hours}h ${mins}m ${secs}s`, urgent: hours < 6 };
+  return { label: `${mins}m ${secs}s`, urgent: true };
+}
+
+function progressPercent(start, end, now) {
+  const s = parseDate(start), e = parseDate(end);
+  if (!s || !e) return 0;
+  const total = e - s;
+  if (total <= 0) return 100;
+  return Math.min(100, Math.max(0, ((now - s) / total) * 100));
+}
+
+// Parses emoji-sectioned / numbered / bulleted text into structured JSX
+function DescriptionRenderer({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const els = [];
+  let prevEmpty = false;
+
+  lines.forEach((line, i) => {
+    const t = line.trim();
+    if (!t) {
+      if (!prevEmpty) els.push(<div key={i} className="h-1.5" />);
+      prevEmpty = true;
+      return;
+    }
+    prevEmpty = false;
+
+    const emojiMatch = t.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})\s*/u);
+    if (emojiMatch) {
+      els.push(
+        <div key={i} className={`flex items-start gap-2 ${i > 0 ? 'mt-2' : ''}`}>
+          <span className="text-sm leading-5 flex-shrink-0">{emojiMatch[0].trim()}</span>
+          <span className="text-sm font-medium text-white/90 leading-5">
+            {t.slice(emojiMatch[0].length)}
+          </span>
+        </div>
+      );
+      return;
+    }
+
+    const numMatch = t.match(/^(\d+)[.)]\s+(.+)/);
+    if (numMatch) {
+      els.push(
+        <div key={i} className="flex items-start gap-2 pl-5">
+          <span className="text-xs font-mono text-muted-foreground/60 flex-shrink-0 w-4 pt-0.5">{numMatch[1]}.</span>
+          <span className="text-sm text-muted-foreground leading-5">{numMatch[2]}</span>
+        </div>
+      );
+      return;
+    }
+
+    const bulletMatch = t.match(/^[•\-\*]\s+(.+)/);
+    if (bulletMatch) {
+      els.push(
+        <div key={i} className="flex items-start gap-2 pl-5">
+          <span className="text-muted-foreground/40 flex-shrink-0 pt-1 text-xs">·</span>
+          <span className="text-sm text-muted-foreground leading-5">{bulletMatch[1]}</span>
+        </div>
+      );
+      return;
+    }
+
+    els.push(<p key={i} className="text-sm text-muted-foreground pl-5 leading-5">{t}</p>);
+  });
+
+  return <div className="space-y-0.5">{els}</div>;
+}
+
+// Parses rules text same way but shorter
+function RulesRenderer({ text }) {
+  if (!text) return null;
+  return (
+    <div className="space-y-1.5">
+      {text.split('\n').filter(Boolean).map((rule, idx) => {
+        const t = rule.trim();
+        const num = t.match(/^(\d+)[.)]\s+(.+)/);
+        if (num) {
+          return (
+            <div key={idx} className="flex items-start gap-2">
+              <span className="text-xs font-mono text-muted-foreground/60 flex-shrink-0 w-5 pt-0.5">{num[1]}.</span>
+              <p className="text-sm text-muted-foreground">{num[2]}</p>
+            </div>
+          );
+        }
+        const bullet = t.match(/^[•\-\*]\s+(.+)/);
+        if (bullet) {
+          return (
+            <div key={idx} className="flex items-start gap-2">
+              <span className="text-muted-foreground/40 flex-shrink-0 pt-1 text-xs">·</span>
+              <p className="text-sm text-muted-foreground">{bullet[1]}</p>
+            </div>
+          );
+        }
+        return <p key={idx} className="text-sm text-muted-foreground">{t}</p>;
+      })}
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
 export default function HackathonsPage() {
   const { user, getAuthHeaders } = useAuth();
 
-  const [hackathons, setHackathons] = useState([]);
-  const [myProjects, setMyProjects] = useState([]);
+  const [hackathons, setHackathons]       = useState([]);
+  const [teamCounts, setTeamCounts]       = useState({});
+  const [myProjects, setMyProjects]       = useState([]);
   const [memberProjects, setMemberProjects] = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
+  const [loadingData, setLoadingData]     = useState(true);
+  const [now, setNow]                     = useState(Date.now());
+
+  // Live countdown tick
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Submission modal
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen]         = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [form, setForm] = useState(emptyForm);
-  const [techInput, setTechInput] = useState('');
-  const [memberInput, setMemberInput] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [form, setForm]                   = useState(emptyForm);
+  const [techInput, setTechInput]         = useState('');
+  const [memberInput, setMemberInput]     = useState('');
+  const [saving, setSaving]               = useState(false);
 
   // Delete
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget]   = useState(null);
+  const [deleteOpen, setDeleteOpen]       = useState(false);
 
   // Expanded hackathon panels
   const [expandedHackathon, setExpandedHackathon] = useState(null);
 
   // GitHub Auto-fill
-  const [githubRepos, setGithubRepos] = useState([]);
+  const [githubRepos, setGithubRepos]     = useState([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [showRepoDropdown, setShowRepoDropdown] = useState(false);
-  
+
   const fetchGithubRepos = async () => {
     if (!user?.github_username) return;
     setFetchingRepos(true);
@@ -81,7 +206,7 @@ export default function HackathonsPage() {
       const res = await axios.get(`https://api.github.com/users/${user.github_username}/repos?sort=updated&per_page=30`);
       setGithubRepos(res.data);
       setShowRepoDropdown(true);
-    } catch (e) {
+    } catch {
       toast.error('Failed to fetch GitHub repos.');
     } finally {
       setFetchingRepos(false);
@@ -90,18 +215,14 @@ export default function HackathonsPage() {
 
   const handleSelectRepo = async (repo) => {
     setShowRepoDropdown(false);
-    toast.success(`Selected ${repo.name}, fetching details...`);
-    
+    toast.success(`Selected ${repo.name}, fetching details…`);
     let readme = '';
     try {
       const readmeRes = await axios.get(`https://api.github.com/repos/${repo.full_name}/readme`, {
-        headers: { Accept: 'application/vnd.github.raw' }
+        headers: { Accept: 'application/vnd.github.raw' },
       });
       readme = readmeRes.data;
-    } catch (e) {
-      // no readme or failed
-    }
-
+    } catch {}
     setForm(f => ({
       ...f,
       title: repo.name,
@@ -109,31 +230,25 @@ export default function HackathonsPage() {
       github_link: repo.html_url,
       live_demo_link: repo.homepage || f.live_demo_link,
       readme_content: readme || f.readme_content,
-      tech_stack: repo.language && !f.tech_stack.includes(repo.language) 
-        ? [...f.tech_stack, repo.language] 
-        : f.tech_stack
+      tech_stack: repo.language && !f.tech_stack.includes(repo.language)
+        ? [...f.tech_stack, repo.language] : f.tech_stack,
     }));
     toast.success('Project details autofilled!');
-  };
-
-  const daysUntil = (d) => {
-    if (!d) return null;
-    const diff = new Date(d) - new Date();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days;
   };
 
   const fetchAll = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [hackRes, myRes, memberRes] = await Promise.all([
+      const [hackRes, myRes, memberRes, countsRes] = await Promise.all([
         axios.get(`${API_URL}/hackathons`),
         axios.get(`${API_URL}/hackathon-projects/my`, { headers: getAuthHeaders() }),
         axios.get(`${API_URL}/hackathon-projects/member`, { headers: getAuthHeaders() }),
+        axios.get(`${API_URL}/hackathons/team-counts`).catch(() => ({ data: {} })),
       ]);
       setHackathons(hackRes.data);
       setMyProjects(myRes.data);
       setMemberProjects(memberRes.data);
+      setTeamCounts(countsRes.data || {});
     } catch {
       toast.error('Failed to load hackathon data');
     } finally {
@@ -188,10 +303,15 @@ export default function HackathonsPage() {
     }
   };
 
-  const removeMember = (url) => setForm(f => ({ ...f, team_members: f.team_members.filter(m => m.rezum_url !== url) }));
+  const removeMember = (url) =>
+    setForm(f => ({ ...f, team_members: f.team_members.filter(m => m.rezum_url !== url) }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.team_name.trim()) {
+      toast.error('Team name is required');
+      return;
+    }
     if (!form.title || !form.description) {
       toast.error('Title and description are required');
       return;
@@ -239,10 +359,8 @@ export default function HackathonsPage() {
     } catch { return d; }
   };
 
-  const myProjectIds = new Set(myProjects.map(p => p.id));
-
   if (loadingData) {
-    return <div className="p-8 lg:p-12 text-muted-foreground">Loading...</div>;
+    return <div className="p-8 lg:p-12 text-muted-foreground">Loading…</div>;
   }
 
   return (
@@ -250,7 +368,7 @@ export default function HackathonsPage() {
       {/* Header */}
       <div className="mb-10">
         <p className="text-sm font-mono text-muted-foreground mb-2">// Hackathons</p>
-        <h1 className="font-serif text-3xl font-medium">Hackathons</h1>
+        <h1 className="font-serif text-3xl font-medium">My Hackathons</h1>
         <p className="text-muted-foreground text-sm mt-2">
           Submit your team's project for any active hackathon. Team members will see the project on their dashboards too.
         </p>
@@ -279,7 +397,7 @@ export default function HackathonsPage() {
         </div>
       )}
 
-      {/* My submissions as team member */}
+      {/* Team member submissions */}
       {memberProjects.length > 0 && (
         <div className="mb-10">
           <p className="text-sm font-mono text-muted-foreground mb-4">// You're a team member in</p>
@@ -308,31 +426,60 @@ export default function HackathonsPage() {
           <p className="text-sm text-muted-foreground">Check back soon for upcoming hackathons.</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {hackathons.map(hack => {
-            const submissions = myProjects.filter(p => p.hackathon_id === hack.id);
-            const isExpanded = expandedHackathon === hack.id;
+            const isExpanded  = expandedHackathon === hack.id;
+            const isActive    = hack.status === 'active';
+            const isUpcoming  = hack.status === 'upcoming';
+            const teamCount   = teamCounts[hack.id] || 0;
+
+            const endMs   = parseDate(hack.end_date)   ? parseDate(hack.end_date)   - now : null;
+            const startMs = parseDate(hack.start_date) ? parseDate(hack.start_date) - now : null;
+            const mainMs  = isActive ? endMs : isUpcoming ? startMs : null;
+            const pct     = isActive ? progressPercent(hack.start_date, hack.end_date, now) : 0;
+            const { label: countLabel, urgent } = mainMs != null && mainMs > 0
+              ? formatCountdown(mainMs)
+              : { label: '', urgent: false };
 
             return (
               <div key={hack.id} className="project-card overflow-hidden">
-                {/* Hackathon header */}
+                {/* Header */}
                 <div className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      {/* Title + badges */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <h2 className="font-sans text-lg font-medium">{hack.name}</h2>
                         <span className={`text-xs px-2 py-0.5 rounded border font-mono ${STATUS_COLORS[hack.status] || STATUS_COLORS.past}`}>
                           {hack.status}
                         </span>
-                        {(() => {
-                          const days = daysUntil(hack.status === 'upcoming' ? hack.start_date : hack.end_date);
-                          if (hack.status === 'active' && days !== null && days >= 0) return <span className="text-xs text-green-400 font-mono">{days}d left</span>;
-                          if (hack.status === 'upcoming' && days !== null && days >= 0) return <span className="text-xs text-blue-400 font-mono">starts in {days}d</span>;
-                          return null;
-                        })()}
+                        {/* Live countdown badge */}
+                        {mainMs != null && mainMs > 0 && (
+                          <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
+                            urgent
+                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                              : isActive
+                              ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          }`}>
+                            {isActive ? '⏱ ' : '🕐 '}{countLabel} {isActive ? 'left' : 'to start'}
+                          </span>
+                        )}
+                        {/* Team count */}
+                        {teamCount > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                            <Users className="w-3 h-3" />{teamCount} team{teamCount !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
-                      <p className={`text-muted-foreground text-sm mb-3 whitespace-pre-line ${!isExpanded ? 'line-clamp-2' : ''}`}>{hack.description}</p>
-                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+
+                      {/* Description — first line only when collapsed */}
+                      <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
+                        {hack.description?.split('\n')[0]}
+                      </p>
+
+                      {/* Meta */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {hack.start_date && (
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
@@ -346,42 +493,52 @@ export default function HackathonsPage() {
                           </span>
                         )}
                         {hack.theme && (
-                          <span className="flex items-center gap-1">
-                            Theme: <span className="text-white">{hack.theme}</span>
-                          </span>
+                          <span>Theme: <span className="text-white">{hack.theme}</span></span>
                         )}
                         {hack.prizes && (
                           <span className="flex items-center gap-1">
-                            <Trophy className="w-3 h-3" />
-                            {hack.prizes}
+                            <Trophy className="w-3 h-3" />{hack.prizes}
                           </span>
                         )}
                       </div>
+
+                      {/* Progress bar — active only */}
+                      {isActive && (
+                        <div className="mt-4">
+                          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                            <span>{formatDate(hack.start_date)}</span>
+                            <span className={`font-mono ${urgent ? 'text-red-400' : 'text-green-400/80'}`}>{Math.round(pct)}% elapsed</span>
+                            <span>{formatDate(hack.end_date)}</span>
+                          </div>
+                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-1000 ${urgent ? 'bg-red-500' : 'bg-green-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Action buttons */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {hack.registration_link && (
-                        <Button
-                          asChild
-                          variant="outline"
-                          className="border-white/20 hover:bg-white hover:text-black rounded-sm px-4 text-sm"
-                        >
-                          <a href={hack.registration_link} target="_blank" rel="noopener noreferrer">
-                            Register
-                          </a>
+                        <Button asChild variant="outline" className="border-white/20 hover:bg-white hover:text-black rounded-sm px-4 text-sm">
+                          <a href={hack.registration_link} target="_blank" rel="noopener noreferrer">Register</a>
                         </Button>
                       )}
-                      {hack.status === 'active' && (
+                      {isActive && (
                         <Button
                           onClick={() => openCreate(hack)}
                           className="bg-white text-black hover:bg-gray-200 rounded-sm px-4 text-sm"
                         >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Submit Project
+                          <Plus className="w-4 h-4 mr-1" />Submit Project
                         </Button>
                       )}
                       <button
                         onClick={() => setExpandedHackathon(isExpanded ? null : hack.id)}
                         className="p-2 text-muted-foreground hover:text-white transition-colors"
+                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
                       >
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
@@ -389,43 +546,58 @@ export default function HackathonsPage() {
                   </div>
                 </div>
 
-                {/* Expanded: details, winners + my submissions */}
+                {/* Expanded details */}
                 {isExpanded && (
                   <div className="border-t border-white/10">
+                    {/* Full description */}
+                    {hack.description && (
+                      <div className="px-6 py-5 border-b border-white/10">
+                        <p className="text-xs font-mono text-muted-foreground mb-3">// About</p>
+                        <DescriptionRenderer text={hack.description} />
+                      </div>
+                    )}
+
+                    {/* Prizes · Rules · Winners */}
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-white/10">
-                      {/* Details */}
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         {hack.prizes && (
                           <div>
                             <p className="text-xs font-mono text-muted-foreground mb-2">// Prizes</p>
-                            <p className="text-sm">{hack.prizes}</p>
+                            <div className="bg-white/3 border border-white/8 rounded-sm p-3">
+                              <p className="text-sm text-yellow-400/90 font-medium">{hack.prizes}</p>
+                            </div>
                           </div>
                         )}
                         {hack.rules && (
                           <div>
                             <p className="text-xs font-mono text-muted-foreground mb-2">// Rules</p>
-                            <p className="text-sm text-muted-foreground whitespace-pre-line">{hack.rules}</p>
+                            <RulesRenderer text={hack.rules} />
                           </div>
                         )}
                         {!hack.prizes && !hack.rules && (
                           <p className="text-sm text-muted-foreground">No additional details.</p>
                         )}
                       </div>
-                      
+
                       {/* Winners */}
                       <div>
                         <p className="text-xs font-mono text-muted-foreground mb-3">// Winners</p>
                         {hack.winners?.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {hack.winners.sort((a, b) => a.position - b.position).map(w => (
-                              <div key={w.position} className="flex items-center gap-3">
-                                <div className={`w-8 h-8 flex items-center justify-center border font-mono text-sm flex-shrink-0 ${
+                              <div key={w.position} className={`flex items-center gap-3 p-3 rounded-sm border ${
+                                w.position === 1 ? 'border-yellow-400/20 bg-yellow-400/5' :
+                                w.position === 2 ? 'border-gray-300/20 bg-white/3' :
+                                w.position === 3 ? 'border-orange-400/20 bg-orange-400/5' :
+                                'border-white/8'
+                              }`}>
+                                <div className={`w-8 h-8 flex items-center justify-center border font-mono text-sm flex-shrink-0 rounded-sm ${
                                   w.position === 1 ? 'border-yellow-400/50 text-yellow-400' :
                                   w.position === 2 ? 'border-gray-300/50 text-gray-300' :
                                   w.position === 3 ? 'border-orange-400/50 text-orange-400' :
                                   'border-white/10 text-muted-foreground'
                                 }`}>
-                                  {w.position}
+                                  #{w.position}
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium">{w.team_name}</p>
@@ -435,9 +607,21 @@ export default function HackathonsPage() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {hack.status === 'past' ? 'No winners announced.' : 'Winners will be announced after the hackathon.'}
-                          </p>
+                          <div className="border border-dashed border-white/10 rounded-sm p-4 text-center">
+                            <p className="text-sm text-muted-foreground">
+                              {hack.status === 'past'
+                                ? 'No winners announced yet.'
+                                : 'Winners will be announced after the hackathon ends.'}
+                            </p>
+                          </div>
+                        )}
+
+                        {teamCount > 0 && (
+                          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground border border-white/8 rounded-sm px-3 py-2 bg-white/2">
+                            <Users className="w-3.5 h-3.5" />
+                            <span className="font-mono font-medium text-white">{teamCount}</span>
+                            <span>team{teamCount !== 1 ? 's' : ''} {hack.status === 'past' ? 'participated' : 'registered'}</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -468,8 +652,12 @@ export default function HackathonsPage() {
               <div className="bg-white/5 p-4 rounded-sm border border-white/10 mb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium flex items-center gap-2"><Github className="w-4 h-4"/> Connect Repository</p>
-                    <p className="text-xs text-muted-foreground mt-1">Fetch title, description, and README directly from your GitHub.</p>
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Github className="w-4 h-4" /> Connect Repository
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Fetch title, description, and README directly from your GitHub.
+                    </p>
                   </div>
                   <Button type="button" onClick={fetchGithubRepos} disabled={fetchingRepos} variant="outline" className="border-white/20 h-8 text-xs px-3">
                     {fetchingRepos ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : 'Fetch Repos'}
@@ -478,8 +666,14 @@ export default function HackathonsPage() {
                 {showRepoDropdown && githubRepos.length > 0 && (
                   <div className="mt-3 max-h-40 overflow-y-auto border border-white/10 rounded-sm bg-[#0a0a0a]">
                     {githubRepos.map(repo => (
-                      <button type="button" key={repo.id} onClick={() => handleSelectRepo(repo)} className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 border-b border-white/5 last:border-0 transition-colors">
-                        {repo.name} <span className="text-xs text-muted-foreground ml-2">{repo.updated_at.split('T')[0]}</span>
+                      <button
+                        type="button"
+                        key={repo.id}
+                        onClick={() => handleSelectRepo(repo)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 border-b border-white/5 last:border-0 transition-colors"
+                      >
+                        {repo.name}
+                        <span className="text-xs text-muted-foreground ml-2">{repo.updated_at.split('T')[0]}</span>
                       </button>
                     ))}
                   </div>
@@ -488,13 +682,15 @@ export default function HackathonsPage() {
             )}
 
             <div className="space-y-2">
-              <Label>Team Name (Optional)</Label>
+              <Label>Team Name *</Label>
               <Input
                 value={form.team_name}
                 onChange={e => setForm(f => ({ ...f, team_name: e.target.value }))}
-                placeholder="Awesome Team"
+                placeholder="e.g. Team Alpha"
                 className="bg-transparent border-white/20 rounded-sm"
+                required
               />
+              <p className="text-xs text-muted-foreground">Required — used to identify your team in results and the winners board.</p>
             </div>
 
             <div className="space-y-2">
@@ -585,14 +781,13 @@ export default function HackathonsPage() {
               </div>
             </div>
 
-            {/* Team members */}
             <div className="space-y-2 pt-2 border-t border-white/10">
               <Label className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
                 Team Member REZUM URLs
               </Label>
               <p className="text-xs text-muted-foreground">
-                Paste each team member's REZUM profile URL (e.g. https://rezum.app/profile/their-slug). The project will appear on their dashboards too.
+                Paste each team member's REZUM profile URL. The project will appear on their dashboards too.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -619,11 +814,9 @@ export default function HackathonsPage() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)} className="border-white/20 rounded-sm">
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)} className="border-white/20 rounded-sm">Cancel</Button>
               <Button type="submit" disabled={saving} className="bg-white text-black hover:bg-gray-200 rounded-sm">
-                {saving ? 'Saving...' : editingProject ? 'Update' : 'Submit'}
+                {saving ? 'Saving…' : editingProject ? 'Update' : 'Submit'}
               </Button>
             </div>
           </form>
@@ -649,17 +842,16 @@ export default function HackathonsPage() {
   );
 }
 
-function HackathonProjectCard({ project, hackathonName, isLeader, onEdit, onDelete, formatDate }) {
-  const toAbsoluteUrl = (url) => {
-    if (!url) return url;
-    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
-  };
+// ── Hackathon Project Card ────────────────────────────────────────────────────
 
+function HackathonProjectCard({ project, hackathonName, isLeader, onEdit, onDelete, formatDate }) {
   return (
     <div className="project-card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
-          {project.team_name && <p className="text-xs font-mono text-muted-foreground mb-1">{project.team_name}</p>}
+          {project.team_name && (
+            <p className="text-xs font-mono text-muted-foreground mb-1">{project.team_name}</p>
+          )}
           <h3 className="font-sans text-base font-medium">{project.title}</h3>
           {hackathonName && <p className="text-xs text-muted-foreground mt-0.5">{hackathonName}</p>}
         </div>
@@ -686,25 +878,28 @@ function HackathonProjectCard({ project, hackathonName, isLeader, onEdit, onDele
       {project.team_members?.length > 0 && (
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
           <Users className="w-3 h-3" />
-          {project.team_members.map((m, i) => (
-            <span key={i}>{m.name || m.slug}</span>
-          )).reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`sep-${i}`}>,</span>, el], [])}
+          {project.team_members
+            .map((m, i) => <span key={i}>{m.name || m.slug}</span>)
+            .reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`sep-${i}`}>,</span>, el], [])}
         </div>
       )}
 
       <div className="flex items-center gap-3 flex-wrap">
         {project.github_link && (
-          <a href={toAbsoluteUrl(project.github_link)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
+          <a href={toAbsoluteUrl(project.github_link)} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
             <Github className="w-3.5 h-3.5" />GitHub
           </a>
         )}
         {project.live_demo_link && (
-          <a href={toAbsoluteUrl(project.live_demo_link)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
+          <a href={toAbsoluteUrl(project.live_demo_link)} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
             <ExternalLink className="w-3.5 h-3.5" />Demo
           </a>
         )}
         {project.video_link && (
-          <a href={toAbsoluteUrl(project.video_link)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
+          <a href={toAbsoluteUrl(project.video_link)} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors">
             <Video className="w-3.5 h-3.5" />Video
           </a>
         )}
