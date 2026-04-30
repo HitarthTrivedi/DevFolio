@@ -35,6 +35,7 @@ const STATUS_COLORS = {
 
 const emptyForm = {
   hackathon_id: '',
+  team_name: '',
   title: '',
   description: '',
   readme_content: '',
@@ -154,6 +155,7 @@ export default function HackathonsPage() {
     setEditingProject(project);
     setForm({
       hackathon_id: project.hackathon_id,
+      team_name: project.team_name || '',
       title: project.title,
       description: project.description,
       readme_content: project.readme_content || '',
@@ -486,6 +488,16 @@ export default function HackathonsPage() {
             )}
 
             <div className="space-y-2">
+              <Label>Team Name (Optional)</Label>
+              <Input
+                value={form.team_name}
+                onChange={e => setForm(f => ({ ...f, team_name: e.target.value }))}
+                placeholder="Awesome Team"
+                className="bg-transparent border-white/20 rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>Title *</Label>
               <Input
                 value={form.title}
@@ -647,6 +659,7 @@ function HackathonProjectCard({ project, hackathonName, isLeader, onEdit, onDele
     <div className="project-card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
+          {project.team_name && <p className="text-xs font-mono text-muted-foreground mb-1">{project.team_name}</p>}
           <h3 className="font-sans text-base font-medium">{project.title}</h3>
           {hackathonName && <p className="text-xs text-muted-foreground mt-0.5">{hackathonName}</p>}
         </div>

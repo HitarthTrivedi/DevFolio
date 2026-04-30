@@ -194,6 +194,7 @@ class TeamMemberInput(BaseModel):
 
 class HackathonProjectBase(BaseModel):
     hackathon_id: str
+    team_name: Optional[str] = ""
     title: str
     description: str
     readme_content: Optional[str] = ""
@@ -207,6 +208,7 @@ class HackathonProjectCreate(HackathonProjectBase):
     pass
 
 class HackathonProjectUpdate(BaseModel):
+    team_name: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     readme_content: Optional[str] = None
@@ -227,6 +229,7 @@ class HackathonProjectResponse(BaseModel):
     id: str
     hackathon_id: str
     team_leader_id: str
+    team_name: str = ""
     title: str
     description: str
     readme_content: str = ""
@@ -818,6 +821,7 @@ async def create_hackathon_project(data: HackathonProjectCreate, current_user: d
         "id": str(uuid.uuid4()),
         "hackathon_id": data.hackathon_id,
         "team_leader_id": current_user["id"],
+        "team_name": data.team_name or "",
         "title": data.title,
         "description": data.description,
         "readme_content": data.readme_content or "",
