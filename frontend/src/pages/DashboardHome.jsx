@@ -11,11 +11,10 @@ import {
   ArrowRight,
   Github,
   Trophy,
-  Clock,
-  Calendar,
   Flag,
   Zap,
-  Timer
+  Timer,
+  Cpu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -208,11 +207,57 @@ function HackathonTimeline({ hackathons }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+// Compute AI-readiness score (0-100) from the user's projects
+// projects scored out of 80, hackathon wins add up to 20 bonus
+function computeAiScore(projects, wins = []) {
+  if (!projects || projects.length === 0) return { score: 0, tips: ['Add at least one project to get started.'] };
+
+  let total = 0;
+  const tips = [];
+  // max 6 pts per project — no free points for just having a title
+  const max = projects.length * 6;
+
+  let missingReadme = 0, missingGithub = 0, missingDesc = 0, missingStack = 0, missingDemo = 0;
+
+  projects.forEach(p => {
+    if ((p.description?.length || 0) >= 150)   { total += 1; } else missingDesc++;
+    if (p.github_link)                          { total += 1; } else missingGithub++;
+    if ((p.readme_content?.length || 0) >= 500) { total += 2; } else missingReadme++;
+    if ((p.tech_stack || []).length >= 3)       { total += 1; } else missingStack++;
+    if (p.live_demo_link || p.video_link)       { total += 1; } else missingDemo++;
+  });
+
+  const projectScore = Math.round((total / max) * 80);
+
+  // hackathon bonus: 1st=10, 2nd=6, 3rd=4, other=2 — capped at 20
+  let hackBonus = 0;
+  wins.forEach(w => {
+    if (w.position === 1)      hackBonus += 10;
+    else if (w.position === 2) hackBonus += 6;
+    else if (w.position === 3) hackBonus += 4;
+    else                       hackBonus += 2;
+  });
+  hackBonus = Math.min(20, hackBonus);
+
+  const score = Math.min(100, projectScore + hackBonus);
+
+  if (missingReadme > 0) tips.push(`Add README (500+ chars) to ${missingReadme} project${missingReadme > 1 ? 's' : ''} — counts double and is the biggest signal for AI parsers.`);
+  if (missingDesc > 0)   tips.push(`Write longer descriptions (150+ chars) for ${missingDesc} project${missingDesc > 1 ? 's' : ''}.`);
+  if (missingGithub > 0) tips.push(`Link GitHub repos for ${missingGithub} project${missingGithub > 1 ? 's' : ''}.`);
+  if (missingStack > 0)  tips.push(`Add at least 3 tech stack tags to ${missingStack} project${missingStack > 1 ? 's' : ''}.`);
+  if (missingDemo > 0)   tips.push(`Add a live demo or video link to ${missingDemo} project${missingDemo > 1 ? 's' : ''}.`);
+  if (wins.length === 0)  tips.push('Win a hackathon to earn up to +20 bonus points.');
+
+  return { score, tips, hackBonus };
+}
+
 export default function DashboardHome() {
   const { user, getAuthHeaders } = useAuth();
   const [projectsCount, setProjectsCount] = useState(0);
   const [achievementsCount, setAchievementsCount] = useState(0);
   const [hackathons, setHackathons] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [hackStats, setHackStats] = useState(null);
   const [exportSection, setExportSection] = useState('all');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -220,14 +265,17 @@ export default function DashboardHome() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [projectsRes, achievementsRes, hacksRes] = await Promise.all([
+        const [projectsRes, achievementsRes, hacksRes, statsRes] = await Promise.all([
           axios.get(`${API_URL}/projects`, { headers: getAuthHeaders() }),
           axios.get(`${API_URL}/achievements`, { headers: getAuthHeaders() }),
           axios.get(`${API_URL}/hackathons`),
+          axios.get(`${API_URL}/profile/${user?.unique_slug}/hackathon-stats`).catch(() => ({ data: null })),
         ]);
+        setProjects(projectsRes.data);
         setProjectsCount(projectsRes.data.length);
         setAchievementsCount(achievementsRes.data.length);
         setHackathons(hacksRes.data);
+        setHackStats(statsRes.data);
       } catch (error) {
         console.error('Error fetching stats:', error);
       } finally {
@@ -325,6 +373,82 @@ export default function DashboardHome() {
           </div>
         </div>
       )}
+
+      {/* AI Readiness Score */}
+      {!loading && (() => {
+        const wins = hackStats?.wins || [];
+        const { score, tips, hackBonus } = computeAiScore(projects, wins);
+        const color = score >= 75 ? '#22c55e' : score >= 50 ? '#eab308' : '#ef4444';
+        const colorClass = score >= 75 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400';
+        const label = score >= 75 ? 'Great shape' : score >= 50 ? 'Needs polish' : 'Needs work';
+        return (
+          <div className="project-card p-8 mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 flex items-center justify-center border border-white/10">
+                <Cpu className="w-5 h-5" strokeWidth={1.5} />
+              </div>
+              <div>
+                <h2 className="font-sans text-base font-medium">AI Readiness Score</h2>
+                <p className="text-xs text-muted-foreground">How well your portfolio parses for AI &amp; recruiter tools</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-8 items-start">
+              {/* Circular gauge */}
+              <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                <div className="relative w-24 h-24">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
+                    <circle
+                      cx="18" cy="18" r="15.9"
+                      fill="none"
+                      stroke={color}
+                      strokeWidth="2.5"
+                      strokeDasharray={`${score} 100`}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <p className={`font-mono text-2xl font-bold leading-none ${colorClass}`}>{score}</p>
+                    <p className="text-[10px] text-muted-foreground">/ 100</p>
+                  </div>
+                </div>
+                <p className={`text-xs font-medium font-mono ${colorClass}`}>{label}</p>
+              </div>
+
+              {/* Tips column */}
+              <div className="flex-1 min-w-0">
+                {tips.length === 0 ? (
+                  <p className="text-sm text-green-400">Your portfolio is fully optimized for AI parsing!</p>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3">Improve your score</p>
+                    <ul className="space-y-2">
+                      {tips.map((tip, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-yellow-400 mt-0.5 flex-shrink-0">→</span>
+                          <span>{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <div className="mt-4 pt-4 border-t border-white/10 space-y-1">
+                  {hackBonus > 0 && (
+                    <p className="text-xs text-yellow-400/80 font-mono">
+                      +{hackBonus} pts from hackathon win{wins.length > 1 ? 's' : ''}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Scored across {projects.length} project{projects.length !== 1 ? 's' : ''}. Portfolio max is 80 — hackathon wins add up to 20 bonus points.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* AI Export Section */}
       <div className="project-card p-8" data-testid="export-section">

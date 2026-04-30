@@ -185,6 +185,9 @@ export default function HackathonsPage() {
   const [form, setForm]                   = useState(emptyForm);
   const [techInput, setTechInput]         = useState('');
   const [memberInput, setMemberInput]     = useState('');
+  const [memberSuggestions, setMemberSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions]     = useState(false);
+  const memberSearchTimer = useState(null);
   const [saving, setSaving]               = useState(false);
 
   // Delete
@@ -278,7 +281,9 @@ export default function HackathonsPage() {
       github_link: project.github_link || '',
       live_demo_link: project.live_demo_link || '',
       video_link: project.video_link || '',
-      team_members: (project.team_members || []).map(m => ({ rezum_url: m.rezum_url })),
+      team_members: (project.team_members || []).map(m =>
+        m.rezum_url ? { rezum_url: m.rezum_url } : { name: m.name }
+      ),
     });
     setTechInput('');
     setMemberInput('');
@@ -296,15 +301,55 @@ export default function HackathonsPage() {
   const removeTech = (t) => setForm(f => ({ ...f, tech_stack: f.tech_stack.filter(x => x !== t) }));
 
   const addMember = () => {
-    const url = memberInput.trim();
-    if (url && !form.team_members.find(m => m.rezum_url === url)) {
-      setForm(f => ({ ...f, team_members: [...f.team_members, { rezum_url: url }] }));
+    const val = memberInput.trim();
+    if (!val) return;
+    const isUrl = val.includes('://') || val.includes('/profile/');
+    const entry = isUrl ? { rezum_url: val } : { name: val };
+    const key = isUrl ? val : val.toLowerCase();
+    const exists = form.team_members.some(m =>
+      (isUrl ? m.rezum_url === val : m.name?.toLowerCase() === val.toLowerCase())
+    );
+    if (!exists) {
+      setForm(f => ({ ...f, team_members: [...f.team_members, entry] }));
       setMemberInput('');
     }
   };
 
-  const removeMember = (url) =>
-    setForm(f => ({ ...f, team_members: f.team_members.filter(m => m.rezum_url !== url) }));
+  const removeMember = (entry) =>
+    setForm(f => ({
+      ...f,
+      team_members: f.team_members.filter(m =>
+        entry.rezum_url ? m.rezum_url !== entry.rezum_url : m.name !== entry.name
+      )
+    }));
+
+  const handleMemberInputChange = (val) => {
+    setMemberInput(val);
+    clearTimeout(memberSearchTimer[0]);
+    if (val.trim().length < 2 || val.includes('://')) {
+      setMemberSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    memberSearchTimer[0] = setTimeout(async () => {
+      try {
+        const res = await axios.get(`${API_URL}/users/search?q=${encodeURIComponent(val.trim())}`);
+        setMemberSuggestions(res.data || []);
+        setShowSuggestions(true);
+      } catch {
+        setMemberSuggestions([]);
+      }
+    }, 250);
+  };
+
+  const pickSuggestion = (u) => {
+    const entry = { rezum_url: `${window.location.origin}/profile/${u.unique_slug}`, _displayName: u.name };
+    const already = form.team_members.some(m => m.rezum_url === entry.rezum_url);
+    if (!already) setForm(f => ({ ...f, team_members: [...f.team_members, entry] }));
+    setMemberInput('');
+    setShowSuggestions(false);
+    setMemberSuggestions([]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -374,6 +419,44 @@ export default function HackathonsPage() {
         </p>
       </div>
 
+      {/* Win badges */}
+      {(() => {
+        const allMine = [...myProjects, ...memberProjects];
+        const wins = [];
+        hackathons.forEach(hack => {
+          (hack.winners || []).forEach(w => {
+            if (allMine.some(p => p.hackathon_id === hack.id && p.team_name === w.team_name)) {
+              wins.push({ position: w.position, hackathon_name: hack.name, prize: w.prize, team_name: w.team_name });
+            }
+          });
+        });
+        const participated = new Set(allMine.map(p => p.hackathon_id)).size;
+        if (wins.length === 0 && participated === 0) return null;
+        return (
+          <div className="flex flex-wrap gap-2 mb-10">
+            {wins.sort((a, b) => a.position - b.position).map((w, i) => (
+              <div key={i} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border text-xs font-medium ${
+                w.position === 1 ? 'border-yellow-400/40 bg-yellow-400/8 text-yellow-400' :
+                w.position === 2 ? 'border-gray-300/40 bg-white/5 text-gray-300' :
+                w.position === 3 ? 'border-orange-400/40 bg-orange-400/8 text-orange-400' :
+                'border-white/20 bg-white/5 text-white/70'
+              }`}>
+                <Trophy className="w-3 h-3" strokeWidth={1.5} />
+                {w.position === 1 ? '🥇' : w.position === 2 ? '🥈' : w.position === 3 ? '🥉' : `#${w.position}`}
+                {' '}{w.hackathon_name}
+                {w.prize && <span className="opacity-70">· {w.prize}</span>}
+              </div>
+            ))}
+            {participated > 0 && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border border-white/15 bg-white/3 text-xs text-muted-foreground">
+                <Trophy className="w-3 h-3" strokeWidth={1.5} />
+                {participated} hackathon{participated !== 1 ? 's' : ''} participated
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* My submissions (Leader) */}
       {myProjects.length > 0 && (
         <div className="mb-10">
@@ -432,13 +515,20 @@ export default function HackathonsPage() {
             const isActive    = hack.status === 'active';
             const isUpcoming  = hack.status === 'upcoming';
             const teamCount   = teamCounts[hack.id] || 0;
+            const mySubmission     = myProjects.find(p => p.hackathon_id === hack.id);
+            const memberSubmission = memberProjects.find(p => p.hackathon_id === hack.id);
+            const hasSubmitted     = !!(mySubmission || memberSubmission);
 
             const endMs   = parseDate(hack.end_date)   ? parseDate(hack.end_date)   - now : null;
             const startMs = parseDate(hack.start_date) ? parseDate(hack.start_date) - now : null;
+            const subMs   = parseDate(hack.submission_deadline) ? parseDate(hack.submission_deadline) - now : null;
             const mainMs  = isActive ? endMs : isUpcoming ? startMs : null;
             const pct     = isActive ? progressPercent(hack.start_date, hack.end_date, now) : 0;
             const { label: countLabel, urgent } = mainMs != null && mainMs > 0
               ? formatCountdown(mainMs)
+              : { label: '', urgent: false };
+            const { label: subLabel, urgent: subUrgent } = subMs != null && subMs > 0
+              ? formatCountdown(subMs)
               : { label: '', urgent: false };
 
             return (
@@ -453,6 +543,17 @@ export default function HackathonsPage() {
                         <span className={`text-xs px-2 py-0.5 rounded border font-mono ${STATUS_COLORS[hack.status] || STATUS_COLORS.past}`}>
                           {hack.status}
                         </span>
+                        {/* Already submitted badge */}
+                        {mySubmission && (
+                          <span className="text-xs px-2 py-0.5 rounded border font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            ✓ Submitted
+                          </span>
+                        )}
+                        {!mySubmission && memberSubmission && (
+                          <span className="text-xs px-2 py-0.5 rounded border font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            ✓ In team
+                          </span>
+                        )}
                         {/* Live countdown badge */}
                         {mainMs != null && mainMs > 0 && (
                           <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
@@ -516,6 +617,12 @@ export default function HackathonsPage() {
                               style={{ width: `${pct}%` }}
                             />
                           </div>
+                          {/* Submission deadline countdown */}
+                          {subMs != null && subMs > 0 && (
+                            <p className={`text-xs font-mono mt-2 ${subUrgent ? 'text-red-400' : 'text-yellow-400'}`}>
+                              ⚠ Submission closes in {subLabel}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -528,12 +635,26 @@ export default function HackathonsPage() {
                         </Button>
                       )}
                       {isActive && (
-                        <Button
-                          onClick={() => openCreate(hack)}
-                          className="bg-white text-black hover:bg-gray-200 rounded-sm px-4 text-sm"
-                        >
-                          <Plus className="w-4 h-4 mr-1" />Submit Project
-                        </Button>
+                        mySubmission ? (
+                          <Button
+                            onClick={() => openEdit(mySubmission)}
+                            variant="outline"
+                            className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 rounded-sm px-4 text-sm"
+                          >
+                            <Pencil className="w-3.5 h-3.5 mr-1" />Edit Submission
+                          </Button>
+                        ) : memberSubmission ? (
+                          <span className="text-xs text-emerald-400 font-mono px-3 py-1.5 border border-emerald-500/20 rounded-sm bg-emerald-500/5">
+                            ✓ In team · {memberSubmission.team_name}
+                          </span>
+                        ) : (
+                          <Button
+                            onClick={() => openCreate(hack)}
+                            className="bg-white text-black hover:bg-gray-200 rounded-sm px-4 text-sm"
+                          >
+                            <Plus className="w-4 h-4 mr-1" />Submit Project
+                          </Button>
+                        )
                       )}
                       <button
                         onClick={() => setExpandedHackathon(isExpanded ? null : hack.id)}
@@ -784,27 +905,71 @@ export default function HackathonsPage() {
             <div className="space-y-2 pt-2 border-t border-white/10">
               <Label className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                Team Member REZUM URLs
+                Team Members
               </Label>
               <p className="text-xs text-muted-foreground">
-                Paste each team member's REZUM profile URL. The project will appear on their dashboards too.
+                Type a name <span className="text-white/50">or</span> paste a REZUM profile URL — URL members get the project on their dashboard too.
               </p>
-              <div className="flex gap-2">
-                <Input
-                  value={memberInput}
-                  onChange={e => setMemberInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addMember())}
-                  placeholder="https://rezum.app/profile/team-member-slug"
-                  className="bg-transparent border-white/20 rounded-sm"
-                />
-                <Button type="button" onClick={addMember} variant="outline" className="border-white/20 rounded-sm">Add</Button>
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    value={memberInput}
+                    onChange={e => handleMemberInputChange(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); addMember(); setShowSuggestions(false); }
+                      if (e.key === 'Escape') setShowSuggestions(false);
+                    }}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    onFocus={() => memberSuggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="Search by name  or  paste a REZUM URL"
+                    className="bg-transparent border-white/20 rounded-sm w-full"
+                  />
+                  {showSuggestions && memberSuggestions.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[#0a0a0a] border border-white/10 rounded-sm overflow-hidden shadow-xl">
+                      {memberSuggestions.map(u => (
+                        <button
+                          key={u.unique_slug}
+                          type="button"
+                          onMouseDown={() => pickSuggestion(u)}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/8 transition-colors border-b border-white/5 last:border-0"
+                        >
+                          <div className="w-6 h-6 rounded-sm bg-white/10 flex items-center justify-center text-[10px] font-mono flex-shrink-0">
+                            {u.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm text-white leading-none mb-0.5">{u.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">/{u.unique_slug}</p>
+                          </div>
+                          {u.github_username && (
+                            <span className="ml-auto text-[10px] text-muted-foreground font-mono flex-shrink-0">
+                              @{u.github_username}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button type="button" onClick={() => { addMember(); setShowSuggestions(false); }} variant="outline" className="border-white/20 rounded-sm">Add</Button>
               </div>
               {form.team_members.length > 0 && (
                 <div className="space-y-1 mt-2">
                   {form.team_members.map((m, i) => (
                     <div key={i} className="flex items-center justify-between bg-white/5 rounded-sm px-3 py-2">
-                      <span className="text-xs font-mono text-muted-foreground truncate">{m.rezum_url}</span>
-                      <button type="button" onClick={() => removeMember(m.rezum_url)} className="text-muted-foreground hover:text-red-400 ml-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {m.rezum_url ? (
+                          <>
+                            <span className="text-[10px] font-mono px-1 py-0.5 border border-white/10 text-muted-foreground rounded">REZUM</span>
+                            <span className="text-xs text-white/80">{m._displayName || m.rezum_url}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[10px] font-mono px-1 py-0.5 border border-white/10 text-muted-foreground rounded">NAME</span>
+                            <span className="text-xs text-white/80">{m.name}</span>
+                          </>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => removeMember(m)} className="text-muted-foreground hover:text-red-400 ml-2 flex-shrink-0">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -875,12 +1040,51 @@ function HackathonProjectCard({ project, hackathonName, isLeader, onEdit, onDele
         </div>
       )}
 
-      {project.team_members?.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-          <Users className="w-3 h-3" />
-          {project.team_members
-            .map((m, i) => <span key={i}>{m.name || m.slug}</span>)
-            .reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`sep-${i}`}>,</span>, el], [])}
+      {(project.team_leader_name || project.team_members?.length > 0) && (
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Users className="w-3 h-3 text-muted-foreground" />
+            <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Team</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {/* Leader chip */}
+            {project.team_leader_name && (() => {
+              const name = project.team_leader_name;
+              const slug = project.team_leader_slug;
+              const chip = (
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/8 border border-white/20 rounded-sm text-xs">
+                  <span className="w-4 h-4 rounded-sm bg-white/15 flex items-center justify-center text-[9px] font-mono font-bold flex-shrink-0">
+                    {name[0]?.toUpperCase()}
+                  </span>
+                  <span className="text-white">{name}</span>
+                  <span className="text-[9px] text-muted-foreground font-mono">leader</span>
+                </div>
+              );
+              return slug ? (
+                <a key="leader" href={`/profile/${slug}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity rounded-sm">
+                  {chip}
+                </a>
+              ) : <span key="leader">{chip}</span>;
+            })()}
+            {/* Member chips */}
+            {(project.team_members || []).map((m, i) => {
+              const displayName = m.name || m.slug || 'Unknown';
+              const profileUrl = m.slug ? `/profile/${m.slug}` : null;
+              const chip = (
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 rounded-sm text-xs">
+                  <span className="w-4 h-4 rounded-sm bg-white/10 flex items-center justify-center text-[9px] font-mono font-bold flex-shrink-0">
+                    {displayName[0]?.toUpperCase()}
+                  </span>
+                  <span className="text-white/80">{displayName}</span>
+                </div>
+              );
+              return profileUrl ? (
+                <a key={i} href={profileUrl} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity rounded-sm">
+                  {chip}
+                </a>
+              ) : <span key={i}>{chip}</span>;
+            })}
+          </div>
         </div>
       )}
 

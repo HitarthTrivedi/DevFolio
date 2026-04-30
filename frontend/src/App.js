@@ -16,6 +16,8 @@ import PublicProfilePage from "@/pages/PublicProfilePage";
 import GitHubCallbackPage from "@/pages/GitHubCallbackPage";
 import HackathonsPage from "@/pages/HackathonsPage";
 import HackathonExplore from "@/pages/HackathonExplore";
+import HallOfFamePage from "@/pages/HallOfFamePage";
+import PublicHackathonPage from "@/pages/PublicHackathonPage";
 import AdminPage from "@/pages/AdminPage";
 
 // Components
@@ -75,6 +77,9 @@ function AppRoutes() {
         </PublicRoute>
       } />
       <Route path="/profile/:slug" element={<PublicProfilePage />} />
+      <Route path="/hackathons" element={<HallOfFamePage />} />
+      <Route path="/hackathons/:id" element={<PublicHackathonPage />} />
+      <Route path="/hall-of-fame" element={<HallOfFamePage />} />
       <Route path="/auth/github/callback" element={<GitHubCallbackPage />} />
       
       {/* Protected Routes */}

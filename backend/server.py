@@ -192,7 +192,8 @@ class HackathonResponse(HackathonBase):
     updated_at: str
 
 class TeamMemberInput(BaseModel):
-    rezum_url: str  # e.g. "https://rezum.app/profile/john-doe-abc1" or just slug
+    rezum_url: Optional[str] = None  # REZUM profile URL or slug (optional)
+    name: Optional[str] = None       # plain display name when no URL
 
 class HackathonProjectBase(BaseModel):
     hackathon_id: str
@@ -221,8 +222,8 @@ class HackathonProjectUpdate(BaseModel):
     team_members: Optional[List[TeamMemberInput]] = None
 
 class ResolvedMember(BaseModel):
-    rezum_url: str
-    slug: str
+    rezum_url: Optional[str] = None
+    slug: Optional[str] = None
     name: Optional[str] = None
     user_id: Optional[str] = None
 
@@ -231,6 +232,8 @@ class HackathonProjectResponse(BaseModel):
     id: str
     hackathon_id: str
     team_leader_id: str
+    team_leader_name: Optional[str] = None
+    team_leader_slug: Optional[str] = None
     team_name: str = ""
     title: str
     description: str
@@ -717,6 +720,69 @@ async def get_public_profile(slug: str, sections: str = "all"):
     
     return response
 
+@api_router.get("/users/search")
+async def search_users(q: str = ""):
+    """Search users by name or slug — for team member lookup."""
+    if not q or len(q.strip()) < 2:
+        return []
+    regex = {"$regex": q.strip(), "$options": "i"}
+    users = await db.users.find(
+        {"$or": [{"name": regex}, {"unique_slug": regex}]},
+        {"_id": 0, "name": 1, "unique_slug": 1, "github_username": 1}
+    ).limit(10).to_list(10)
+    return users
+
+@api_router.get("/profile/{slug}/hackathon-stats")
+async def get_profile_hackathon_stats(slug: str):
+    """Hackathon participation + win stats for a public profile."""
+    user = await db.users.find_one({"unique_slug": slug}, {"_id": 0, "id": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    hack_projects = await db.hackathon_projects.find(
+        {"$or": [
+            {"team_leader_id": user["id"]},
+            {"team_members.user_id": user["id"]}
+        ]},
+        {"_id": 0, "hackathon_id": 1, "team_name": 1}
+    ).to_list(200)
+
+    if not hack_projects:
+        return {"participated": 0, "wins": []}
+
+    hackathon_ids = list({hp["hackathon_id"] for hp in hack_projects})
+    hackathons = await db.hackathons.find(
+        {"id": {"$in": hackathon_ids}},
+        {"_id": 0, "id": 1, "name": 1, "winners": 1}
+    ).to_list(200)
+    hack_map = {h["id"]: h for h in hackathons}
+
+    # Build set of team names per hackathon for this user
+    team_names_by_hack = {}
+    for hp in hack_projects:
+        hid = hp["hackathon_id"]
+        tn = (hp.get("team_name") or "").strip().lower()
+        if tn:
+            team_names_by_hack.setdefault(hid, set()).add(tn)
+
+    wins = []
+    for hid, team_names in team_names_by_hack.items():
+        hack = hack_map.get(hid)
+        if not hack:
+            continue
+        for winner in hack.get("winners", []):
+            wn = (winner.get("team_name") or "").strip().lower()
+            if wn and wn in team_names:
+                wins.append({
+                    "position": winner["position"],
+                    "hackathon_name": hack["name"],
+                    "team_name": winner["team_name"],
+                    "prize": winner.get("prize", ""),
+                })
+
+    wins.sort(key=lambda w: w["position"])
+    return {"participated": len(hackathon_ids), "wins": wins}
+
 @api_router.get("/export/{slug}")
 async def export_for_ai(slug: str, sections: str = "all", format: str = "json"):
     """
@@ -821,15 +887,39 @@ async def list_users(admin_user: dict = Depends(require_admin)):
 async def _resolve_team_members(members: List[TeamMemberInput]) -> List[ResolvedMember]:
     resolved = []
     for m in members:
-        slug = _extract_slug(m.rezum_url)
-        user = await db.users.find_one({"unique_slug": slug}, {"_id": 0})
-        resolved.append(ResolvedMember(
-            rezum_url=m.rezum_url,
-            slug=slug,
-            name=user["name"] if user else None,
-            user_id=user["id"] if user else None,
-        ))
+        if m.rezum_url:
+            slug = _extract_slug(m.rezum_url)
+            user = await db.users.find_one({"unique_slug": slug}, {"_id": 0})
+            resolved.append(ResolvedMember(
+                rezum_url=m.rezum_url,
+                slug=slug,
+                name=user["name"] if user else m.name,
+                user_id=user["id"] if user else None,
+            ))
+        elif m.name:
+            resolved.append(ResolvedMember(name=m.name.strip()))
     return resolved
+
+async def _enrich_with_leader(projects: list) -> list:
+    """Attach team_leader_name/slug and remove leader from team_members list."""
+    leader_ids = list({p["team_leader_id"] for p in projects})
+    leaders = await db.users.find(
+        {"id": {"$in": leader_ids}},
+        {"_id": 0, "id": 1, "name": 1, "unique_slug": 1}
+    ).to_list(len(leader_ids))
+    leader_map = {l["id"]: l for l in leaders}
+    for p in projects:
+        leader = leader_map.get(p["team_leader_id"], {})
+        p["team_leader_name"] = leader.get("name")
+        p["team_leader_slug"] = leader.get("unique_slug")
+        # strip leader from members list so they don't appear twice
+        leader_name = (leader.get("name") or "").strip().lower()
+        p["team_members"] = [
+            m for m in p.get("team_members", [])
+            if m.get("user_id") != p["team_leader_id"]
+            and (m.get("name") or "").strip().lower() != leader_name
+        ]
+    return projects
 
 # --- Public hackathon listing ---
 
@@ -933,7 +1023,7 @@ async def get_my_hackathon_projects(current_user: dict = Depends(get_current_use
     projects = await db.hackathon_projects.find(
         {"team_leader_id": current_user["id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
-    return projects
+    return await _enrich_with_leader(projects)
 
 @api_router.get("/hackathon-projects/member", response_model=List[HackathonProjectResponse])
 async def get_member_hackathon_projects(current_user: dict = Depends(get_current_user)):
@@ -941,7 +1031,7 @@ async def get_member_hackathon_projects(current_user: dict = Depends(get_current
     projects = await db.hackathon_projects.find(
         {"team_members.user_id": current_user["id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
-    return projects
+    return await _enrich_with_leader(projects)
 
 @api_router.put("/hackathon-projects/{project_id}", response_model=HackathonProjectResponse)
 async def update_hackathon_project(project_id: str, data: HackathonProjectUpdate, current_user: dict = Depends(get_current_user)):

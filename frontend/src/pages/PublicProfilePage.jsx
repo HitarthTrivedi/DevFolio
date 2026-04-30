@@ -7,7 +7,8 @@ import {
   Calendar,
   Copy,
   Check,
-  Video
+  Video,
+  Trophy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,12 +35,17 @@ export default function PublicProfilePage() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [hackStats, setHackStats] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await axios.get(`${API_URL}/profile/${slug}`);
-        setProfile(response.data);
+        const [profileRes, statsRes] = await Promise.all([
+          axios.get(`${API_URL}/profile/${slug}`),
+          axios.get(`${API_URL}/profile/${slug}/hackathon-stats`).catch(() => ({ data: null })),
+        ]);
+        setProfile(profileRes.data);
+        setHackStats(statsRes.data);
       } catch (err) {
         setError('Profile not found');
       } finally {
@@ -173,6 +179,34 @@ export default function PublicProfilePage() {
               )}
             </p>
           </header>
+
+          {/* Hackathon badges */}
+          {hackStats && (hackStats.participated > 0 || hackStats.wins?.length > 0) && (
+            <div className="flex flex-wrap gap-2 mb-8">
+              {hackStats.wins?.map((w, i) => (
+                <div
+                  key={i}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border text-xs font-medium ${
+                    w.position === 1 ? 'border-yellow-400/40 bg-yellow-400/8 text-yellow-400' :
+                    w.position === 2 ? 'border-gray-300/40 bg-white/5 text-gray-300' :
+                    w.position === 3 ? 'border-orange-400/40 bg-orange-400/8 text-orange-400' :
+                    'border-white/20 bg-white/5 text-white/70'
+                  }`}
+                >
+                  <Trophy className="w-3 h-3" strokeWidth={1.5} />
+                  {w.position === 1 ? '🥇' : w.position === 2 ? '🥈' : w.position === 3 ? '🥉' : `#${w.position}`}
+                  {' '}{w.hackathon_name}
+                  {w.prize && <span className="opacity-70">· {w.prize}</span>}
+                </div>
+              ))}
+              {hackStats.participated > 0 && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border border-white/15 bg-white/3 text-xs text-muted-foreground">
+                  <Trophy className="w-3 h-3" strokeWidth={1.5} />
+                  {hackStats.participated} hackathon{hackStats.participated !== 1 ? 's' : ''} participated
+                </div>
+              )}
+            </div>
+          )}
 
           {/* GitHub Contribution Calendar */}
           {githubUsername && (

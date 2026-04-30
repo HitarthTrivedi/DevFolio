@@ -6,7 +6,8 @@ import {
   Pencil,
   Trash2,
   ExternalLink,
-  Calendar
+  Calendar,
+  Trophy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,8 +42,9 @@ const emptyAchievement = {
 };
 
 export default function AchievementsPage() {
-  const { getAuthHeaders } = useAuth();
+  const { user, getAuthHeaders } = useAuth();
   const [achievements, setAchievements] = useState([]);
+  const [hackWins, setHackWins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -53,16 +55,18 @@ export default function AchievementsPage() {
 
   const fetchAchievements = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/achievements`, {
-        headers: getAuthHeaders()
-      });
-      setAchievements(response.data);
+      const [achRes, statsRes] = await Promise.all([
+        axios.get(`${API_URL}/achievements`, { headers: getAuthHeaders() }),
+        axios.get(`${API_URL}/profile/${user?.unique_slug}/hackathon-stats`).catch(() => ({ data: null })),
+      ]);
+      setAchievements(achRes.data);
+      setHackWins(statsRes.data?.wins || []);
     } catch (error) {
       toast.error('Failed to load achievements');
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders]);
+  }, [getAuthHeaders, user?.unique_slug]);
 
   useEffect(() => {
     fetchAchievements();
@@ -166,10 +170,68 @@ export default function AchievementsPage() {
         </Button>
       </div>
 
+      {/* Hackathon win achievements — auto-generated, read-only */}
+      {!loading && hackWins.length > 0 && (
+        <div className="mb-8">
+          <p className="text-sm font-mono text-muted-foreground mb-4">// Hackathon Wins</p>
+          <div className="space-y-4">
+            {hackWins.sort((a, b) => a.position - b.position).map((w, i) => {
+              const isGold   = w.position === 1;
+              const isSilver = w.position === 2;
+              const isBronze = w.position === 3;
+              const medal    = isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : null;
+              const rankLabel = isGold ? '1st' : isSilver ? '2nd' : isBronze ? '3rd' : `#${w.position}`;
+              const rankSuffix = isGold ? 'Place' : isSilver ? 'Place' : isBronze ? 'Place' : 'Place';
+              const accentColor = isGold
+                ? { border: 'border-yellow-400/30', bg: 'bg-yellow-400/5', text: 'text-yellow-400', rankBg: 'bg-yellow-400/10 border-yellow-400/30', dimText: 'text-yellow-400/70' }
+                : isSilver
+                ? { border: 'border-gray-300/25', bg: 'bg-white/3', text: 'text-gray-200', rankBg: 'bg-white/8 border-white/20', dimText: 'text-gray-300/70' }
+                : isBronze
+                ? { border: 'border-orange-400/25', bg: 'bg-orange-400/5', text: 'text-orange-400', rankBg: 'bg-orange-400/10 border-orange-400/30', dimText: 'text-orange-400/70' }
+                : { border: 'border-white/10', bg: 'bg-white/3', text: 'text-white/70', rankBg: 'bg-white/5 border-white/10', dimText: 'text-muted-foreground' };
+
+              return (
+                <div key={i} className={`project-card overflow-hidden border ${accentColor.border} ${accentColor.bg}`}>
+                  <div className="flex items-stretch">
+                    {/* Big rank column */}
+                    <div className={`flex flex-col items-center justify-center px-6 py-5 border-r ${accentColor.border} min-w-[96px] gap-1`}>
+                      <span className="text-4xl leading-none">{medal || `#${w.position}`}</span>
+                      <span className={`font-serif text-3xl font-bold leading-none ${accentColor.text}`}>{rankLabel}</span>
+                      <span className={`text-xs font-mono uppercase tracking-widest ${accentColor.dimText}`}>{rankSuffix}</span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 p-5 flex flex-col justify-center gap-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-sans text-base font-semibold">{w.hackathon_name}</h3>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 border border-white/10 text-muted-foreground bg-white/3 rounded">
+                          ALPHAKORE
+                        </span>
+                      </div>
+                      {w.team_name && (
+                        <p className="text-sm text-muted-foreground">Team: <span className="text-white/80">{w.team_name}</span></p>
+                      )}
+                      {w.prize && (
+                        <p className={`text-sm font-medium ${accentColor.text}`}>{w.prize}</p>
+                      )}
+                    </div>
+
+                    {/* Trophy icon */}
+                    <div className="flex items-center pr-5">
+                      <Trophy className={`w-5 h-5 ${accentColor.dimText}`} strokeWidth={1.5} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Achievements List */}
       {loading ? (
         <div className="text-muted-foreground">Loading...</div>
-      ) : achievements.length === 0 ? (
+      ) : achievements.length === 0 && hackWins.length === 0 ? (
         <div className="empty-state" data-testid="empty-achievements">
           <div className="font-mono text-6xl text-muted-foreground/20 mb-4">{'[ ]'}</div>
           <p className="text-lg mb-2">No achievements yet</p>
@@ -183,7 +245,7 @@ export default function AchievementsPage() {
             Add Achievement
           </Button>
         </div>
-      ) : (
+      ) : achievements.length > 0 ? (
         <div className="space-y-4">
           {achievements.map((achievement) => (
             <div
@@ -244,7 +306,7 @@ export default function AchievementsPage() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Create/Edit Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
