@@ -46,7 +46,7 @@ const emptyForm = {
 };
 
 export default function HackathonsPage() {
-  const { getAuthHeaders } = useAuth();
+  const { user, getAuthHeaders } = useAuth();
 
   const [hackathons, setHackathons] = useState([]);
   const [myProjects, setMyProjects] = useState([]);
@@ -67,6 +67,60 @@ export default function HackathonsPage() {
 
   // Expanded hackathon panels
   const [expandedHackathon, setExpandedHackathon] = useState(null);
+
+  // GitHub Auto-fill
+  const [githubRepos, setGithubRepos] = useState([]);
+  const [fetchingRepos, setFetchingRepos] = useState(false);
+  const [showRepoDropdown, setShowRepoDropdown] = useState(false);
+  
+  const fetchGithubRepos = async () => {
+    if (!user?.github_username) return;
+    setFetchingRepos(true);
+    try {
+      const res = await axios.get(`https://api.github.com/users/${user.github_username}/repos?sort=updated&per_page=30`);
+      setGithubRepos(res.data);
+      setShowRepoDropdown(true);
+    } catch (e) {
+      toast.error('Failed to fetch GitHub repos.');
+    } finally {
+      setFetchingRepos(false);
+    }
+  };
+
+  const handleSelectRepo = async (repo) => {
+    setShowRepoDropdown(false);
+    toast.success(`Selected ${repo.name}, fetching details...`);
+    
+    let readme = '';
+    try {
+      const readmeRes = await axios.get(`https://api.github.com/repos/${repo.full_name}/readme`, {
+        headers: { Accept: 'application/vnd.github.raw' }
+      });
+      readme = readmeRes.data;
+    } catch (e) {
+      // no readme or failed
+    }
+
+    setForm(f => ({
+      ...f,
+      title: repo.name,
+      description: repo.description || f.description,
+      github_link: repo.html_url,
+      live_demo_link: repo.homepage || f.live_demo_link,
+      readme_content: readme || f.readme_content,
+      tech_stack: repo.language && !f.tech_stack.includes(repo.language) 
+        ? [...f.tech_stack, repo.language] 
+        : f.tech_stack
+    }));
+    toast.success('Project details autofilled!');
+  };
+
+  const daysUntil = (d) => {
+    if (!d) return null;
+    const diff = new Date(d) - new Date();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days;
+  };
 
   const fetchAll = useCallback(async () => {
     setLoadingData(true);
@@ -200,6 +254,29 @@ export default function HackathonsPage() {
         </p>
       </div>
 
+      {/* My submissions (Leader) */}
+      {myProjects.length > 0 && (
+        <div className="mb-10">
+          <p className="text-sm font-mono text-muted-foreground mb-4">// Your Submissions</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myProjects.map(p => {
+              const hack = hackathons.find(h => h.id === p.hackathon_id);
+              return (
+                <HackathonProjectCard
+                  key={p.id}
+                  project={p}
+                  hackathonName={hack?.name}
+                  isLeader={true}
+                  onEdit={() => openEdit(p)}
+                  onDelete={() => { setDeleteTarget(p); setDeleteOpen(true); }}
+                  formatDate={formatDate}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* My submissions as team member */}
       {memberProjects.length > 0 && (
         <div className="mb-10">
@@ -245,8 +322,14 @@ export default function HackathonsPage() {
                         <span className={`text-xs px-2 py-0.5 rounded border font-mono ${STATUS_COLORS[hack.status] || STATUS_COLORS.past}`}>
                           {hack.status}
                         </span>
+                        {(() => {
+                          const days = daysUntil(hack.status === 'upcoming' ? hack.start_date : hack.end_date);
+                          if (hack.status === 'active' && days !== null && days >= 0) return <span className="text-xs text-green-400 font-mono">{days}d left</span>;
+                          if (hack.status === 'upcoming' && days !== null && days >= 0) return <span className="text-xs text-blue-400 font-mono">starts in {days}d</span>;
+                          return null;
+                        })()}
                       </div>
-                      <p className="text-muted-foreground text-sm mb-3 line-clamp-2 whitespace-pre-line">{hack.description}</p>
+                      <p className={`text-muted-foreground text-sm mb-3 whitespace-pre-line ${!isExpanded ? 'line-clamp-2' : ''}`}>{hack.description}</p>
                       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                         {hack.start_date && (
                           <span className="flex items-center gap-1">
@@ -304,48 +387,57 @@ export default function HackathonsPage() {
                   </div>
                 </div>
 
-                {/* Expanded: winners + my submissions */}
+                {/* Expanded: details, winners + my submissions */}
                 {isExpanded && (
                   <div className="border-t border-white/10">
-                    {/* Winners */}
-                    {hack.winners?.length > 0 && (
-                      <div className="p-6 border-b border-white/10">
-                        <p className="text-sm font-mono text-muted-foreground mb-4">// Winners</p>
-                        <div className="space-y-2">
-                          {hack.winners.map(w => (
-                            <div key={w.position} className="flex items-center gap-3 text-sm">
-                              <span className="font-mono text-muted-foreground w-6">#{w.position}</span>
-                              <span className="font-medium">{w.team_name}</span>
-                              {w.prize && <span className="text-muted-foreground">— {w.prize}</span>}
-                            </div>
-                          ))}
-                        </div>
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-white/10">
+                      {/* Details */}
+                      <div className="space-y-4">
+                        {hack.prizes && (
+                          <div>
+                            <p className="text-xs font-mono text-muted-foreground mb-2">// Prizes</p>
+                            <p className="text-sm">{hack.prizes}</p>
+                          </div>
+                        )}
+                        {hack.rules && (
+                          <div>
+                            <p className="text-xs font-mono text-muted-foreground mb-2">// Rules</p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">{hack.rules}</p>
+                          </div>
+                        )}
+                        {!hack.prizes && !hack.rules && (
+                          <p className="text-sm text-muted-foreground">No additional details.</p>
+                        )}
                       </div>
-                    )}
-
-                    {/* My submissions for this hackathon */}
-                    <div className="p-6">
-                      <p className="text-sm font-mono text-muted-foreground mb-4">// Your Submissions</p>
-                      {submissions.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          {hack.status === 'active'
-                            ? 'No submission yet. Click "Submit Project" to add yours.'
-                            : 'You did not submit a project for this hackathon.'}
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {submissions.map(p => (
-                            <HackathonProjectCard
-                              key={p.id}
-                              project={p}
-                              isLeader={true}
-                              onEdit={() => openEdit(p)}
-                              onDelete={() => { setDeleteTarget(p); setDeleteOpen(true); }}
-                              formatDate={formatDate}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      
+                      {/* Winners */}
+                      <div>
+                        <p className="text-xs font-mono text-muted-foreground mb-3">// Winners</p>
+                        {hack.winners?.length > 0 ? (
+                          <div className="space-y-3">
+                            {hack.winners.sort((a, b) => a.position - b.position).map(w => (
+                              <div key={w.position} className="flex items-center gap-3">
+                                <div className={`w-8 h-8 flex items-center justify-center border font-mono text-sm flex-shrink-0 ${
+                                  w.position === 1 ? 'border-yellow-400/50 text-yellow-400' :
+                                  w.position === 2 ? 'border-gray-300/50 text-gray-300' :
+                                  w.position === 3 ? 'border-orange-400/50 text-orange-400' :
+                                  'border-white/10 text-muted-foreground'
+                                }`}>
+                                  {w.position}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">{w.team_name}</p>
+                                  {w.prize && <p className="text-xs text-muted-foreground">{w.prize}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {hack.status === 'past' ? 'No winners announced.' : 'Winners will be announced after the hackathon.'}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -370,6 +462,29 @@ export default function HackathonsPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+            {user?.github_username && (
+              <div className="bg-white/5 p-4 rounded-sm border border-white/10 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-2"><Github className="w-4 h-4"/> Connect Repository</p>
+                    <p className="text-xs text-muted-foreground mt-1">Fetch title, description, and README directly from your GitHub.</p>
+                  </div>
+                  <Button type="button" onClick={fetchGithubRepos} disabled={fetchingRepos} variant="outline" className="border-white/20 h-8 text-xs px-3">
+                    {fetchingRepos ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : 'Fetch Repos'}
+                  </Button>
+                </div>
+                {showRepoDropdown && githubRepos.length > 0 && (
+                  <div className="mt-3 max-h-40 overflow-y-auto border border-white/10 rounded-sm bg-[#0a0a0a]">
+                    {githubRepos.map(repo => (
+                      <button type="button" key={repo.id} onClick={() => handleSelectRepo(repo)} className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 border-b border-white/5 last:border-0 transition-colors">
+                        {repo.name} <span className="text-xs text-muted-foreground ml-2">{repo.updated_at.split('T')[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Title *</Label>
               <Input
