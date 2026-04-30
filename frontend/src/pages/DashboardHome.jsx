@@ -239,7 +239,7 @@ export default function DashboardHome() {
   }, [getAuthHeaders]);
 
   const getExportUrl = () =>
-    `${window.location.origin}/api/export/${user?.unique_slug}?sections=${exportSection}`;
+    `${API_URL}/export/${user?.unique_slug}?sections=${exportSection}`;
 
   const copyToClipboard = async () => {
     try {
