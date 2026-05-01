@@ -882,6 +882,21 @@ async def list_users(admin_user: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
     return users
 
+@api_router.get("/admin/stats")
+async def get_admin_stats(admin_user: dict = Depends(require_admin)):
+    """Get high-level stats for the admin panel."""
+    total_users = await db.users.count_documents({})
+    total_hackathons = await db.hackathons.count_documents({})
+    total_projects = await db.projects.count_documents({})
+    total_hackathon_projects = await db.hackathon_projects.count_documents({})
+    
+    return {
+        "total_users": total_users,
+        "total_hackathons": total_hackathons,
+        "total_projects": total_projects + total_hackathon_projects,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
 # ============ HACKATHON ROUTES ============
 
 async def _resolve_team_members(members: List[TeamMemberInput]) -> List[ResolvedMember]:

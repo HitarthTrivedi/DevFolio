@@ -3,7 +3,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
-  Plus, Pencil, Trash2, X, Trophy, Users, Eye, Save, ChevronDown, ChevronUp
+  Plus, Pencil, Trash2, X, Trophy, Users, Eye, Save, ChevronDown, ChevronUp,
+  ExternalLink, Shield, Mail, Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,6 +75,8 @@ export default function AdminPage() {
 
   const [hackathons, setHackathons] = useState([]);
   const [teamCounts, setTeamCounts] = useState({});
+  const [usersList, setUsersList] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Hackathon form
@@ -98,17 +101,21 @@ export default function AdminPage() {
   const [winnersSubmissions, setWinnersSubmissions] = useState([]);
   const [loadingWinnersData, setLoadingWinnersData] = useState(false);
 
-  const fetchHackathons = useCallback(async () => {
+  const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
-      const [hackRes, countsRes] = await Promise.all([
+      const [hackRes, countsRes, statsRes, usersRes] = await Promise.all([
         axios.get(`${API_URL}/admin/hackathons`, { headers: getAuthHeaders() }),
         axios.get(`${API_URL}/hackathons/team-counts`).catch(() => ({ data: {} })),
+        axios.get(`${API_URL}/admin/stats`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
+        axios.get(`${API_URL}/admin/users`, { headers: getAuthHeaders() }).catch(() => ({ data: [] })),
       ]);
       setHackathons(hackRes.data);
       setTeamCounts(countsRes.data || {});
+      setStats(statsRes.data);
+      setUsersList(usersRes.data || []);
     } catch {
-      toast.error('Failed to load hackathons');
+      toast.error('Failed to load admin data');
     } finally {
       setLoading(false);
     }
@@ -116,8 +123,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!user?.is_admin) { navigate('/dashboard'); return; }
-    fetchHackathons();
-  }, [user, fetchHackathons, navigate]);
+    fetchAdminData();
+  }, [user, fetchAdminData, navigate]);
 
   const openCreate = () => {
     setEditingHack(null);
@@ -159,7 +166,7 @@ export default function AdminPage() {
         toast.success('Hackathon created!');
       }
       setHackModalOpen(false);
-      fetchHackathons();
+      fetchAdminData();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to save hackathon');
     } finally {
@@ -174,7 +181,7 @@ export default function AdminPage() {
       toast.success('Hackathon deleted');
       setDeleteOpen(false);
       setDeleteTarget(null);
-      fetchHackathons();
+      fetchAdminData();
     } catch {
       toast.error('Failed to delete');
     }
@@ -220,7 +227,7 @@ export default function AdminPage() {
       );
       toast.success(toSave.length ? 'Winners saved!' : 'Winners cleared.');
       setWinnersOpen(false);
-      fetchHackathons();
+      fetchAdminData();
     } catch {
       toast.error('Failed to save winners');
     } finally {
@@ -255,13 +262,61 @@ export default function AdminPage() {
       <div className="mb-10">
         <p className="text-sm font-mono text-muted-foreground mb-2">// Admin</p>
         <h1 className="font-serif text-3xl font-medium">Admin Panel</h1>
-        <p className="text-muted-foreground text-sm mt-2">Manage hackathons, submissions, and winners.</p>
+        <p className="text-muted-foreground text-sm mt-2">Manage hackathons, submissions, and platform growth.</p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="project-card p-5 border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-2 text-muted-foreground">
+            <Users className="w-4 h-4" />
+            <span className="text-xs font-mono uppercase tracking-wider">Total Members</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-serif">{stats?.total_users ?? '—'}</span>
+            <span className="text-[10px] text-green-400 font-mono">Platform Users</span>
+          </div>
+        </div>
+        <div className="project-card p-5 border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-2 text-muted-foreground">
+            <Trophy className="w-4 h-4" />
+            <span className="text-xs font-mono uppercase tracking-wider">Hackathons</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-serif">{stats?.total_hackathons ?? '—'}</span>
+            <span className="text-[10px] text-blue-400 font-mono">Managed Events</span>
+          </div>
+        </div>
+        <div className="project-card p-5 border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-2 text-muted-foreground">
+            <Eye className="w-4 h-4" />
+            <span className="text-xs font-mono uppercase tracking-wider">Total Projects</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-serif">{stats?.total_projects ?? '—'}</span>
+            <span className="text-[10px] text-purple-400 font-mono">Submissions</span>
+          </div>
+        </div>
+        <div className="project-card p-5 border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-2 text-muted-foreground">
+            <Save className="w-4 h-4" />
+            <span className="text-xs font-mono uppercase tracking-wider">Last Sync</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-mono text-muted-foreground">
+              {stats?.timestamp ? new Date(stats.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+            </span>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="hackathons">
         <TabsList className="bg-white/5 border border-white/10 rounded-sm mb-8">
           <TabsTrigger value="hackathons" className="rounded-sm data-[state=active]:bg-white data-[state=active]:text-black">
             Hackathons
+          </TabsTrigger>
+          <TabsTrigger value="members" className="rounded-sm data-[state=active]:bg-white data-[state=active]:text-black">
+            Members
           </TabsTrigger>
         </TabsList>
 
@@ -352,6 +407,54 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="members">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-sm text-muted-foreground">{usersList.length} member(s) registered</p>
+          </div>
+
+          {loading ? (
+            <div className="text-muted-foreground">Loading...</div>
+          ) : usersList.length === 0 ? (
+            <div className="empty-state">
+              <Users className="w-12 h-12 text-muted-foreground/20 mb-4" strokeWidth={1} />
+              <p className="text-lg">No members found</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {usersList.map(u => (
+                <div key={u.id} className="project-card p-5 flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-sans text-base font-medium">{u.name}</h3>
+                      {u.is_admin && (
+                        <span className="flex items-center gap-1 text-[10px] bg-white/10 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter font-mono">
+                          <Shield className="w-2.5 h-2.5" /> Admin
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground font-mono">
+                      <span className="flex items-center gap-1.5"><Mail className="w-3 h-3" /> {u.email}</span>
+                      <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3" /> Joined {formatDate(u.created_at)}</span>
+                      <span className="text-white/40">ID: {u.id.slice(0, 8)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate(`/profile/${u.unique_slug}`)}
+                      className="text-muted-foreground hover:text-white h-8 px-2"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1.5" />
+                      View Profile
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
